@@ -1,0 +1,13 @@
+__pycache__
+
+*/gigahorse-toolchain/.temp
+*/gigahorse-toolchain/cache
+# */gigahorse-toolchain/contracts
+*/gigahorse-toolchain/res
+*/gigahorse-toolchain/*.out
+*/gigahorse-toolchain/results.json
+
+*.log
+.vscode
+
+.DS_Store

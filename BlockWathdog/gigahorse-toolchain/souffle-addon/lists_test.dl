@@ -1,0 +1,24 @@
+#include "functor_includes.dl"
+
+.type StringList = [x: symbol, y: StringList]
+
+
+.decl TestCat(list1: StringList, list2: StringList, res: StringList)
+.output TestCat
+
+TestCat(nil, nil, @list_concat(nil, nil)):-
+  nil = @list_concat(nil, nil).
+
+TestCat(a, b, @list_concat(a, b)):-
+  b = nil,
+  a = @list_append(nil, "aaa"), a = ["aaa", nil],
+  @list_concat(a, b) = a.
+
+TestCat(a, b, @list_concat(a, b)):-
+  a = nil,
+  b = @list_append(nil, "bbb"), b = ["bbb", nil],
+  @list_concat(a, b) = b.
+
+TestCat(a, b, @list_concat(a, b)):-
+  a = @list_append(nil, "aaa"), a = ["aaa", nil],
+  b = @list_append(@list_append(nil, "aaa"), "bbb"), b = ["aaa", ["bbb", nil]].
