@@ -1,8 +1,9 @@
-import argparse
-import sys
+import logging
 import pandas as pd
 import os
 from global_params import *
+
+log = logging.getLogger(__name__)
 
 
 # find feasible path of flow from the tainted var to sensitive var
@@ -46,15 +47,16 @@ class FlowAnalysis:
     def new_pp(
         self, caller, callsite, contract_addr, func_sign, index, caller_funcSign, type
     ):
+        # find the contract address that the current program point executes (with the highest level)
         addr = self.find_executed_pp(caller, callsite, contract_addr, func_sign)
         return {
-            'caller': caller,
-            'callsite': callsite,
-            'contract_addr': addr,
-            'func_sign': func_sign,
-            'index': index,
+            "caller": caller,
+            "callsite": callsite,
+            "contract_addr": addr,
+            "func_sign": func_sign,
+            "index": index,
             "caller_funcSign": caller_funcSign,
-            'type': type,
+            "type": type,
         }
 
     def is_same(self, pp1, pp2):
@@ -68,6 +70,8 @@ class FlowAnalysis:
             + str(pp1["index"])
             + "_"
             + pp1["type"]
+            + "_"
+            + pp1["caller_funcSign"]
         )
         pp2_str = (
             pp2["caller"]
@@ -79,6 +83,8 @@ class FlowAnalysis:
             + str(pp2["index"])
             + "_"
             + pp2["type"]
+            + "_"
+            + pp2["caller_funcSign"]
         )
         if pp1_str == pp2_str:
             return True
@@ -139,7 +145,7 @@ class FlowAnalysis:
                     + "/out/Leslie_SensitiveOpOfBadRandomnessAfterExternalCall.csv"
                 )
                 if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-                    df = pd.read_csv(loc, header=None, sep='	')
+                    df = pd.read_csv(loc, header=None, sep="	")
                     df.columns = ["funcSign", "callStmt", "sensitiveVar", "sourceOp"]
                     # it is not neccessary to label the func, just focus on the callStmt
                     df = df.loc[df["funcSign"] == temp_funcSign]
@@ -159,7 +165,7 @@ class FlowAnalysis:
                     + "/out/Leslie_EnvVarFlowsToTaintedVar.csv"
                 )
                 if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-                    df = pd.read_csv(loc, header=None, sep='	')
+                    df = pd.read_csv(loc, header=None, sep="	")
                     df.columns = ["funcSign", "envVar", "taintedVar"]
                     # it is not neccessary to label the func, just focus on the callStmt
                     df = df.loc[df["funcSign"] == temp_funcSign]
@@ -181,7 +187,7 @@ class FlowAnalysis:
                     + "/out/Leslie_Op_CreateInLoop.csv"
                 )
                 if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-                    df = pd.read_csv(loc, header=None, sep='	')
+                    df = pd.read_csv(loc, header=None, sep="	")
                     df.columns = ["funcSign", "stmt"]
                     # it is not neccessary to label the func, just focus on the callStmt
                     df = df.loc[df["funcSign"] == temp_funcSign]
@@ -203,7 +209,7 @@ class FlowAnalysis:
                     + "/out/Leslie_Op_SoleCreate.csv"
                 )
                 if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-                    df = pd.read_csv(loc, header=None, sep='	')
+                    df = pd.read_csv(loc, header=None, sep="	")
                     df.columns = ["funcSign", "stmt"]
                     # it is not neccessary to label the func, just focus on the callStmt
                     df = df.loc[df["funcSign"] == temp_funcSign]
@@ -225,7 +231,7 @@ class FlowAnalysis:
                     + "/out/Leslie_Op_Selfdestruct.csv"
                 )
                 if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-                    df = pd.read_csv(loc, header=None, sep='	')
+                    df = pd.read_csv(loc, header=None, sep="	")
                     df.columns = ["funcSign", "target"]
                     # it is not neccessary to label the func, just focus on the callStmt
                     df = df.loc[df["funcSign"] == temp_funcSign]
@@ -245,7 +251,7 @@ class FlowAnalysis:
                     + "/out/Leslie_ExternalCallInHook.csv"
                 )
                 if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-                    df = pd.read_csv(loc, header=None, sep='	')
+                    df = pd.read_csv(loc, header=None, sep="	")
                     df.columns = ["callStmt", "funcSign"]
                     # it is not neccessary to label the func, just focus on the callStmt
                     df = df.loc[df["funcSign"] == temp_funcSign]
@@ -265,7 +271,7 @@ class FlowAnalysis:
                     + "/out/Leslie_ExternalCallInFallback.csv"
                 )
                 if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-                    df = pd.read_csv(loc, header=None, sep='	')
+                    df = pd.read_csv(loc, header=None, sep="	")
                     df.columns = ["callStmt", "funcSign"]
                     # it is not neccessary to label the func, just focus on the callStmt
                     df = df.loc[df["funcSign"] == temp_funcSign]
@@ -287,7 +293,7 @@ class FlowAnalysis:
                     + "/out/Leslie_SensitiveOpOfDoSAfterExternalCall.csv"
                 )
                 if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-                    df = pd.read_csv(loc, header=None, sep='	')
+                    df = pd.read_csv(loc, header=None, sep="	")
                     df.columns = [
                         "funcSign",
                         "callStmt",
@@ -305,7 +311,7 @@ class FlowAnalysis:
     def get_func_rets_flow_from_sources(self, contract_addr, func_sign):
         loc = OUTPUT_PATH + ".temp/" + contract_addr + "/out/Leslie_TaintedFuncRet.csv"
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-            df = pd.read_csv(loc, header=None, sep='	')
+            df = pd.read_csv(loc, header=None, sep="	")
             df.columns = ["funcSign", "retIndex", "ret"]
             df = df.loc[df["funcSign"] == func_sign]
             if len(df) != 0:
@@ -319,7 +325,7 @@ class FlowAnalysis:
         call_args = []
         loc = OUTPUT_PATH + ".temp/" + contract_addr + "/out/Leslie_TaintedCallArg.csv"
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-            df = pd.read_csv(loc, header=None, sep='	')
+            df = pd.read_csv(loc, header=None, sep="	")
             df.columns = ["funcSign", "callStmt", "callArgIndex"]
             df = df.loc[df["funcSign"] == func_sign]
             for i in range(len(df)):
@@ -341,31 +347,16 @@ class FlowAnalysis:
 
             # only mark the analyzed contract's source
             if self.contracts[key].level == 0:
+                # get the caller function of the main contract (attack-initiate contract)
                 temp_caller_funcSign = self.contracts[key].func_sign
-                # get the taint source: function returns of external calls
-                temp_indexes = self.get_func_rets_flow_from_sources(
-                    temp_address, temp_funcSign
-                )
-                if len(temp_indexes) > 0:
-                    for temp_index in temp_indexes:
-                        # generate a site, label the return index of the external call
-                        pps_near_source.append(
-                            self.new_pp(
-                                temp_caller,
-                                temp_callsite,
-                                temp_address,
-                                temp_funcSign,
-                                temp_index,
-                                temp_caller_funcSign,
-                                "func_ret",
-                            )
-                        )
 
                 # get the taint source: function arguments of the function
                 temp_call_args = self.get_call_args_flow_from_sources(
-                    temp_address, temp_funcSign
+                    temp_address, temp_caller_funcSign
                 )
+                # log.info(temp_call_args)
                 if len(temp_call_args) > 0:
+                    # get details of the external call
                     for temp_call_arg in temp_call_args:
                         (
                             temp_external_call_caller,
@@ -376,6 +367,15 @@ class FlowAnalysis:
                             self.contracts[key].external_calls,
                         )
                         pps_near_source.append(
+                            # should identify several info:
+                            # (1) caller initiates this possible attack call
+                            # (2) call arguments of this call
+                            # (3) callee address
+                            # (4) callee function signature
+                            # (5) call argument index
+                            # (6) function that this call lies in
+                            # (7) the taint type (for extension)
+                            # summary: caller and caller_funcSign are from the current contract, other denotes the callee
                             self.new_pp(
                                 temp_external_call_caller,
                                 temp_call_arg["callStmt"],
@@ -386,9 +386,10 @@ class FlowAnalysis:
                                 "call_arg",
                             )
                         )
+        # log.info(pps_near_source)
         return pps_near_source
 
-    # sink
+    # sink, not used yet
     def get_callsites_flow_to_sink(self, contract_addr, func_sign):
         callsites = []
         sensitive_callsigs = []
@@ -399,7 +400,7 @@ class FlowAnalysis:
             + "/out/Leslie_CallRetToSensitiveVar.csv"
         )
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-            df = pd.read_csv(loc, header=None, sep='	')
+            df = pd.read_csv(loc, header=None, sep="	")
             df.columns = [
                 "funcSign",
                 "callStmt",
@@ -435,7 +436,7 @@ class FlowAnalysis:
             + "/out/Leslie_FuncArgToSensitiveVar.csv"
         )
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-            df = pd.read_csv(loc, header=None, sep='	')
+            df = pd.read_csv(loc, header=None, sep="	")
             df.columns = [
                 "funcSign",
                 "callStmt",
@@ -469,9 +470,10 @@ class FlowAnalysis:
             temp_callsite = key.split("_")[1]
             temp_address = key.split("_")[2]
             temp_funcSign = key.split("_")[3]
+            # the function that sink site lies in
             temp_caller_funcSign = key.split("_")[4]
-
-            # get the taint source: function arguments of the call arg to callee address
+            # log.info(temp_caller_funcSign)
+            # get the taint sink: function arguments of the call arg to callee address
             temp_call_args, sigs_funcarg = self.get_func_arg_flow_to_sink(
                 temp_address, temp_funcSign
             )
@@ -491,13 +493,16 @@ class FlowAnalysis:
                             temp_external_call_logic_addr,
                             temp_external_call_func_sign,
                             temp_call_arg["funcArgIndex"],
-                            temp_caller_funcSign,
+                            # bug fixed
+                            self.contracts[key].func_sign,
                             "call_arg",
                         )
                     )
-            # temp = sigs_callret + sigs_funcarg
-            temp = sigs_funcarg
-            for i in temp:
+                # log.info("====sink====")
+                # notice: the 'caller_funcsign' is the function that call the victim to call the 'funcsign' in the attack contract
+                # log.info(pps_near_sink)
+            # get the functions called by victim (possible)
+            for i in sigs_funcarg:
                 sensitive_callsigs.append(i)
         return pps_near_sink, sensitive_callsigs
 
@@ -510,7 +515,7 @@ class FlowAnalysis:
             + "/out/Leslie_Spread_CallRetToFuncRet.csv"
         )
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-            df = pd.read_csv(loc, header=None, sep='	')
+            df = pd.read_csv(loc, header=None, sep="	")
             df.columns = [
                 "callStmt",
                 "callRet",
@@ -540,7 +545,7 @@ class FlowAnalysis:
             + "/out/Leslie_Spread_CallRetToCallArg.csv"
         )
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-            df = pd.read_csv(loc, header=None, sep='	')
+            df = pd.read_csv(loc, header=None, sep="	")
             df.columns = [
                 "callStmt1",
                 "callRet",
@@ -570,7 +575,7 @@ class FlowAnalysis:
             + "/out/Leslie_Spread_FuncArgToCallArg.csv"
         )
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-            df = pd.read_csv(loc, header=None, sep='	')
+            df = pd.read_csv(loc, header=None, sep="	")
             df.columns = [
                 "funcSign",
                 "funcArgIndex",
@@ -600,7 +605,7 @@ class FlowAnalysis:
             + "/out/Leslie_Spread_FuncArgToCalleeVar.csv"
         )
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-            df = pd.read_csv(loc, header=None, sep='	')
+            df = pd.read_csv(loc, header=None, sep="	")
             df.columns = [
                 "funcSign",
                 "funcArgIndex",
@@ -629,7 +634,7 @@ class FlowAnalysis:
             + "/out/Leslie_Spread_FuncArgToFuncRet.csv"
         )
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-            df = pd.read_csv(loc, header=None, sep='	')
+            df = pd.read_csv(loc, header=None, sep="	")
             df.columns = [
                 "funcSign",
                 "funcArgIndex",
@@ -649,11 +654,15 @@ class FlowAnalysis:
 
     # from tainted source flows to sink
     def transfer(self, pp):
+        # log.info(pp)
         next_pps = []
-        caller_funcSign = pp["func_sign"]
+        # log.info(pp["caller_funcSign"])
         parent_contract = self.find_parent(
             pp["contract_addr"], pp["func_sign"], pp["caller"], pp["callsite"]
         )
+        # log.info(parent_contract.logic_addr)
+        # log.info(parent_contract.caller)
+        # log.info(parent_contract.func_sign)
         try:
             child_contract = self.find_contract(
                 pp["caller"],
@@ -662,6 +671,9 @@ class FlowAnalysis:
                 pp["func_sign"],
                 pp["caller_funcSign"],
             )
+            # log.info(child_contract.logic_addr)
+            # log.info(child_contract.caller)
+            # log.info(child_contract.func_sign)
         except:
             return next_pps
 
@@ -679,7 +691,7 @@ class FlowAnalysis:
                             parent_contract.logic_addr,
                             parent_contract.func_sign,
                             index,
-                            caller_funcSign,
+                            pp["caller_funcSign"],
                             "func_ret",
                         )
                     )
@@ -700,12 +712,15 @@ class FlowAnalysis:
                         temp_caller,
                         callArg["callStmt"],
                         temp_logic_addr,
+                        # temp func sign is the called function that lies in the attacker contract
                         temp_func_sign,
-                        str(callArg["callArgIndex"]),
-                        caller_funcSign,
+                        callArg["callArgIndex"],
+                        # pp[func_sign] is the function that calls back to attacker contract
+                        pp["func_sign"],
                         "call_arg",
                     )
                 )
+                # log.info(next_pps)
 
         if pp["type"] == "call_arg":
             callArgs = []
@@ -721,6 +736,7 @@ class FlowAnalysis:
                 temp_result = self.get_external_call_info(
                     callArg["callStmt"], child_contract.external_calls
                 )
+                # log.info(temp_result)
                 if temp_result != None:
                     temp_caller, temp_logic_addr, temp_func_sign = temp_result
                 else:
@@ -731,12 +747,13 @@ class FlowAnalysis:
                         callArg["callStmt"],
                         temp_logic_addr,
                         temp_func_sign,
-                        str(callArg["callArgIndex"]),
-                        caller_funcSign,
+                        callArg["callArgIndex"],
+                        pp["func_sign"],
                         "call_arg",
                     )
                 )
-
+                # log.info(next_pps)
+            # the return index of the function call
             indexes = self.spread_funcArg_funcRet(
                 pp["contract_addr"], pp["func_sign"], pp["index"]
             )
@@ -748,7 +765,7 @@ class FlowAnalysis:
                         pp["contract_addr"],
                         pp["func_sign"],
                         index,
-                        caller_funcSign,
+                        pp["caller_funcSign"],
                         "func_ret",
                     )
                 )
@@ -762,6 +779,8 @@ class FlowAnalysis:
             temp_pp = pending.pop()
             for pp in self.transfer(temp_pp):
                 if self.is_same(pp, pp2):
+                    # log.info(pp)
+                    # log.info(pp2)
                     return True
                 else:
                     pending.append(pp)
@@ -779,13 +798,14 @@ class FlowAnalysis:
         result = False
 
         # br and dos detection
+        # now first focus on reentrancy
         if self.intraprocedural_br_analysis():
             self.attack_matrix["br"] = True
-            result = True
+            # result = True
 
         if self.intraprocedural_dos_analysis():
             self.attack_matrix["dos"] = True
-            result = True
+            # result = True
 
         # so how to define the tainted source
         # !the tainted source should only be from the analyzed contracts (i.e., input contract)
@@ -793,11 +813,12 @@ class FlowAnalysis:
         # and how to define the sentive sink
         pps_near_sink, sensitive_callsigs = self.get_pps_near_sink()
 
-        # set call sigs
+        # set call sigs in the sink site
         self.sensitive_callsigs = sensitive_callsigs
 
         reachable = False
         reachable_site = {}
+        # for every source, find whether one sink can be reached
         for pp1 in pps_near_source:
             for pp2 in pps_near_sink:
                 if self.is_same(pp1, pp2):
@@ -821,6 +842,7 @@ class FlowAnalysis:
         attack_reenter_info = {}
 
         if reachable:
+            # judge whether the attacker contract implements the sensitive functions (called by victims)
             overlap = list(
                 set(sensitive_callsigs).intersection(
                     set(self.external_call_in_func_sigature)
@@ -845,8 +867,8 @@ class FlowAnalysis:
                                 temp_funcSign = ec["funcSign"]
 
                                 res = {
-                                    'reenter_target': temp_target_address,
-                                    'reenter_funcSign': temp_funcSign,
+                                    "reenter_target": temp_target_address,
+                                    "reenter_funcSign": temp_funcSign,
                                 }
                                 if (
                                     res not in attack_reenter_info[i]

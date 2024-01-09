@@ -1,10 +1,14 @@
+import logging
 import pandas as pd
 import os
 from datetime import datetime
 from web3 import Web3
 from global_params import *
 
+log = logging.getLogger(__name__)
 
+
+# Data structure of contracts in the tracing process
 class Contract:
     def __init__(
         self,
@@ -25,7 +29,7 @@ class Contract:
         self.origin = False
         if self.func_sign == "":
             self.origin = True
-        self.func = ""
+        self.func = []
         # all funcs and func_sigs
         self.func_sign_dict = {}
         self.func_sign_list = []
@@ -39,6 +43,7 @@ class Contract:
         self.external_calls = []
         self.level = level
         self.createbin = False
+        self.storage_space = {}
         self.analyze()
 
     def format_addr(self, addr):
@@ -74,6 +79,10 @@ class Contract:
             self.url = (
                 "https://eth-mainnet.g.alchemy.com/v2/6t0LpEw9cr0OlGIVTFqs92aOIkfhktMk"
             )
+        elif self.platform == "BSC":
+            self.url = (
+                "wss://bsc.getblock.io/6bf31e7d-f5b2-4860-8e15-aa9a11f6533d/mainnet/"
+            )
         else:
             self.url = ""
 
@@ -102,13 +111,17 @@ class Contract:
                     self.func_sign_list = ["__function_selector__"]
             return
         else:
-            w3 = Web3(Web3.HTTPProvider(self.url))
+            # switch case for http or wss provider
+            if self.url.startswith("https"):
+                w3 = Web3(Web3.HTTPProvider(self.url))
+            else:
+                w3 = Web3(Web3.WebsocketProvider(self.url))
             contract_address = Web3.to_checksum_address(self.logic_addr)
             code = str(w3.eth.get_code(contract_address).hex())
             if code != "0x":
                 with open(loc, "w") as f:
                     f.write(code[2:])
-            # try to analyze the createbin of the contract (load from the firts transaction input)
+            # todo: try to analyze the createbin of the contract (load from the firts transaction input)
             # else:
 
     def analyze_contract(self):
@@ -127,7 +140,7 @@ class Contract:
             + "/out/Leslie_FunctionSelector.csv"
         )
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-            df = pd.read_csv(loc, header=None, sep='	')
+            df = pd.read_csv(loc, header=None, sep="	")
             df.columns = ["func", "funcSign"]
             # store all funcs and their signatures
             if self.origin == True:
@@ -139,7 +152,7 @@ class Contract:
                     func_signs.append(fun_sign)
                 self.func_sign_list = func_signs
                 self.func_sign_dict = dict(zip(funcs, func_signs))
-            else:
+            else:  # for intermediate interacted contracts, we only trace targeted functions
                 try:
                     self.func = list(df.loc[df["funcSign"] == self.func_sign, "func"])[
                         0
@@ -160,7 +173,7 @@ class Contract:
                 + "/out/Leslie_ExternalCall_Known_Arg.csv"
             )
             if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-                df = pd.read_csv(loc, header=None, sep='	')
+                df = pd.read_csv(loc, header=None, sep="	")
                 df.columns = ["func", "callStmt", "argIndex", "argVal"]
                 # it is not neccessary to label the func, just focus on the callStmt
                 df = df.loc[df["callStmt"] == self.call_site]
@@ -171,11 +184,12 @@ class Contract:
 
     # in some cases, the storage address is not the same as the logic address
     def get_storage_content(self, slot_index, byteLow, byteHigh):
-        w3 = Web3(Web3.HTTPProvider(self.url))
-        contract_address = Web3.to_checksum_address(self.storage_addr)
-        storage_content = str(
-            w3.eth.get_storage_at(contract_address, slot_index, self.block_number).hex()
-        )
+        if self.url.startswith("https"):
+            w3 = Web3(Web3.HTTPProvider(self.url))
+        else:
+            w3 = Web3(Web3.WebsocketProvider(self.url))
+        contract_address = w3.to_checksum_address(self.storage_addr)
+        storage_content = str(w3.eth.get_storage_at(contract_address, slot_index).hex())
         storage_content = storage_content.replace("0x", "")
         if byteLow == 0:
             contract_addr = "0x" + storage_content[-(byteHigh + 1) * 2 :]
@@ -184,14 +198,16 @@ class Contract:
         return contract_addr
 
     def set_external_calls(self, func, func_sign):
-        loc1 = (
+        loc_external_call = (
             "./gigahorse-toolchain/.temp/"
             + self.logic_addr
             + "/out/Leslie_ExternalCallInfo.csv"
         )
-        if os.path.exists(loc1) and (os.path.getsize(loc1) > 0):
-            df1 = pd.read_csv(loc1, header=None, sep='	')
-            df1.columns = [
+        if os.path.exists(loc_external_call) and (
+            os.path.getsize(loc_external_call) > 0
+        ):
+            df_external_call = pd.read_csv(loc_external_call, header=None, sep="	")
+            df_external_call.columns = [
                 "func",
                 "callStmt",
                 "callOp",
@@ -199,89 +215,104 @@ class Contract:
                 "numArg",
                 "numRet",
             ]
-            df1 = df1.loc[df1["func"] == func]
+            df_external_call = df_external_call.loc[df_external_call["func"] == func]
         else:
-            df1 = pd.DataFrame()
+            df_external_call = pd.DataFrame()
 
         if self.origin == True:
-            for i in range(len(df1)):
-                func = df1.iloc[i]["func"]
+            for i in range(len(df_external_call)):
+                func = df_external_call.iloc[i]["func"]
+                # find functions with external calls
                 if self.func_sign_dict[func] not in self.external_call_in_func_sigature:
                     self.external_call_in_func_sigature.append(
                         self.func_sign_dict[func]
                     )
 
         # for callee identification
-        loc2 = (
+        loc_callee_const = (
             "./gigahorse-toolchain/.temp/"
             + self.logic_addr
             + "/out/Leslie_ExternalCall_Callee_ConstType.csv"
         )
-        if os.path.exists(loc2) and (os.path.getsize(loc2) > 0):
-            df2 = pd.read_csv(loc2, header=None, sep='	')
-            df2.columns = ["func", "callStmt", "callee"]
+        if os.path.exists(loc_callee_const) and (os.path.getsize(loc_callee_const) > 0):
+            df_callee_const = pd.read_csv(loc_callee_const, header=None, sep="	")
+            df_callee_const.columns = ["func", "callStmt", "callee"]
         else:
-            df2 = pd.DataFrame()
+            df_callee_const = pd.DataFrame()
 
-        loc3 = (
+        loc_callee_storage = (
             "./gigahorse-toolchain/.temp/"
             + self.logic_addr
             + "/out/Leslie_ExternalCall_Callee_StorageType.csv"
         )
-        if os.path.exists(loc3) and (os.path.getsize(loc3) > 0):
-            df3 = pd.read_csv(loc3, header=None, sep='	')
-            df3.columns = ["func", "callStmt", "storageSlot", "byteLow", "byteHigh"]
+        if os.path.exists(loc_callee_storage) and (
+            os.path.getsize(loc_callee_storage) > 0
+        ):
+            df_callee_storage = pd.read_csv(loc_callee_storage, header=None, sep="	")
+            df_callee_storage.columns = [
+                "func",
+                "callStmt",
+                "storageSlot",
+                "byteLow",
+                "byteHigh",
+            ]
         else:
-            df3 = pd.DataFrame()
+            df_callee_storage = pd.DataFrame()
 
-        loc6 = (
+        loc_callee_storage_proxy = (
             "./gigahorse-toolchain/.temp/"
             + self.logic_addr
             + "/out/Leslie_ExternalCall_Callee_StorageType_ForProxy.csv"
         )
-        if os.path.exists(loc6) and (os.path.getsize(loc6) > 0):
-            df6 = pd.read_csv(loc6, header=None, sep='	')
-            df6.columns = ["func", "callStmt", "storageSlot"]
+        if os.path.exists(loc_callee_storage_proxy) and (
+            os.path.getsize(loc_callee_storage_proxy) > 0
+        ):
+            df_callee_storage_proxy = pd.read_csv(
+                loc_callee_storage_proxy, header=None, sep="	"
+            )
+            df_callee_storage_proxy.columns = ["func", "callStmt", "storageSlot"]
         else:
-            df6 = pd.DataFrame()
+            df_callee_storage_proxy = pd.DataFrame()
 
         # for target function signature identification
-        loc4 = (
+        loc_fs_const = (
             "./gigahorse-toolchain/.temp/"
             + self.logic_addr
             + "/out/Leslie_ExternalCall_FuncSign_ConstType.csv"
         )
-        if os.path.exists(loc4) and (os.path.getsize(loc4) > 0):
-            df4 = pd.read_csv(loc4, header=None, sep='	')
-            df4.columns = ["func", "callStmt", "funcSign"]
+        if os.path.exists(loc_fs_const) and (os.path.getsize(loc_fs_const) > 0):
+            df_fs_const = pd.read_csv(loc_fs_const, header=None, sep="	")
+            df_fs_const.columns = ["func", "callStmt", "funcSign"]
         else:
-            df4 = pd.DataFrame()
+            df_fs_const = pd.DataFrame()
 
-        loc5 = (
+        loc_fs_proxy = (
             "./gigahorse-toolchain/.temp/"
             + self.logic_addr
             + "/out/Leslie_ExternalCall_FuncSign_ProxyType.csv"
         )
-        if os.path.exists(loc5) and (os.path.getsize(loc5) > 0):
-            df5 = pd.read_csv(loc5, header=None, sep='	')
-            df5.columns = ["func", "callStmt"]
+        if os.path.exists(loc_fs_proxy) and (os.path.getsize(loc_fs_proxy) > 0):
+            df_fs_proxy = pd.read_csv(loc_fs_proxy, header=None, sep="	")
+            df_fs_proxy.columns = ["func", "callStmt"]
         else:
-            df5 = pd.DataFrame()
+            df_fs_proxy = pd.DataFrame()
 
-        loc7 = (
+        loc_callee_funarg = (
             "./gigahorse-toolchain/.temp/"
             + self.logic_addr
             + "/out/Leslie_ExternalCall_Callee_FuncArgType.csv"
         )
-        if os.path.exists(loc7) and (os.path.getsize(loc7) > 0):
-            df7 = pd.read_csv(loc7, header=None, sep='	')
-            df7.columns = ["func", "callStmt", "pubFun", "argIndex"]
+        if os.path.exists(loc_callee_funarg) and (
+            os.path.getsize(loc_callee_funarg) > 0
+        ):
+            df_callee_funarg = pd.read_csv(loc_callee_funarg, header=None, sep="	")
+            df_callee_funarg.columns = ["func", "callStmt", "pubFun", "argIndex"]
         else:
-            df7 = pd.DataFrame()
+            df_callee_funarg = pd.DataFrame()
 
         # for every call point in the contract, try to find its call target
-        for i in range(len(df1)):
-            call_stmt = df1.iloc[i]["callStmt"]
+        for i in range(len(df_external_call)):
+            call_stmt = df_external_call.iloc[i]["callStmt"]
             # find target callee's logic address
             external_call = {
                 "logic_addr": "",
@@ -291,15 +322,17 @@ class Contract:
                 "call_site": "",
             }
 
-            if len(df2) != 0:
-                df_temp = df2.loc[df2["callStmt"] == call_stmt]
+            if len(df_callee_const) != 0:
+                df_temp = df_callee_const.loc[df_callee_const["callStmt"] == call_stmt]
                 if len(df_temp) > 0:
                     external_call["logic_addr"] = list(df_temp["callee"])[0].replace(
                         "000000000000000000000000", ""
                     )
 
-            if len(df3) != 0:
-                df_temp = df3.loc[df3["callStmt"] == call_stmt]
+            if len(df_callee_storage) != 0:
+                df_temp = df_callee_storage.loc[
+                    df_callee_storage["callStmt"] == call_stmt
+                ]
                 if len(df_temp) > 0:
                     external_call["logic_addr"] = self.get_storage_content(
                         list(df_temp["storageSlot"])[0],
@@ -307,16 +340,20 @@ class Contract:
                         list(df_temp["byteHigh"])[0],
                     )
 
-            if len(df6) != 0:
-                df_temp = df6.loc[df6["callStmt"] == call_stmt]
+            if len(df_callee_storage_proxy) != 0:
+                df_temp = df_callee_storage_proxy.loc[
+                    df_callee_storage_proxy["callStmt"] == call_stmt
+                ]
                 if len(df_temp) > 0:
                     external_call["logic_addr"] = self.get_storage_content(
                         list(df_temp["storageSlot"])[0], 0, 19
                     )
 
             # find callee got from the func arg, and try to recover the know args
-            if len(df7) != 0:
-                df_temp = df7.loc[df7["callStmt"] == call_stmt]
+            if len(df_callee_funarg) != 0:
+                df_temp = df_callee_funarg.loc[
+                    df_callee_funarg["callStmt"] == call_stmt
+                ]
                 if len(df_temp) > 0:
                     # find the function that use the itself's public func args
                     if list(df_temp["func"])[0] == list(df_temp["pubFun"])[0]:
@@ -325,7 +362,8 @@ class Contract:
                             external_call["logic_addr"] = self.callArgVals[temp_index]
 
             # to differentiate the delegatecall and normal call
-            if df1.iloc[i]["callOp"] == "DELEGATECALL":
+            if df_external_call.iloc[i]["callOp"] == "DELEGATECALL":
+                # the storage addr is still the current addr
                 external_call["storage_addr"] = self.logic_addr
                 external_call["caller"] = self.caller
                 external_call["call_site"] = self.call_site
@@ -335,13 +373,13 @@ class Contract:
                 external_call["call_site"] = call_stmt
 
             # label the function signature
-            if len(df4) != 0:
-                df_temp = df4.loc[df4["callStmt"] == call_stmt]
+            if len(df_fs_const) != 0:
+                df_temp = df_fs_const.loc[df_fs_const["callStmt"] == call_stmt]
                 if len(df_temp) > 0:
                     external_call["funcSign"] = list(df_temp["funcSign"])[0][:10]
 
-            if len(df5) != 0:
-                df_temp = df5.loc[df5["callStmt"] == call_stmt]
+            if len(df_fs_proxy) != 0:
+                df_temp = df_fs_proxy.loc[df_fs_proxy["callStmt"] == call_stmt]
                 if len(df_temp) > 0:
                     external_call["funcSign"] = func_sign
 
