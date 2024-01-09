@@ -1,7 +1,5 @@
 #include "functor_includes.dl"
 
-.type StringList = [x: symbol, y: StringList]
-
 
 .decl TestCat(list1: StringList, list2: StringList, res: StringList)
 .output TestCat
@@ -21,4 +19,13 @@ TestCat(a, b, @list_concat(a, b)):-
 
 TestCat(a, b, @list_concat(a, b)):-
   a = @list_append(nil, "aaa"), a = ["aaa", nil],
-  b = @list_append(@list_append(nil, "aaa"), "bbb"), b = ["aaa", ["bbb", nil]].
+  b = @list_append(@list_append(nil, "bbb"), "ccc"), b = ["bbb", ["ccc", nil]].
+
+
+TestCat(a, b, @list_concat(a, b)):-
+  a = @list_append(@list_append(nil, "aaa"), "bbb"), a = ["aaa", ["bbb", nil]],
+  b = @list_append(nil, "ccc"), b = ["ccc", nil].
+
+TestCat(a, b, @list_concat(a, b)):-
+  a = @list_append(@list_append(nil, "aaa"), "bbb"), a = ["aaa", ["bbb", nil]],
+    b = @list_append(@list_append(nil, "ccc"), "ddd"), b = ["ccc", ["ddd", nil]].

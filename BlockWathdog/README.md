@@ -1,7 +1,7 @@
 # BlockWatchdog
 
 ![Static Badge](https://img.shields.io/badge/license-apache-blue)
-![Static Badge](https://img.shields.io/badge/dev-rust_version_undergoing-red)
+![Static Badge](https://img.shields.io/badge/dev-rust_version_(lydia)_undergoing-red)
 
 ## Description
 
@@ -10,7 +10,7 @@ A attacker contract hunter for detecting reentrancy attacks and real exploitable
 ## Features
 
 - Recover all possible call chains in attacker contract.
-- Report critical attack semantic, e.g.,  call in hook functions, selfdestruct, use randomnumer, etc.
+- Report critical attack semantic, e.g., call in hook functions, selfdestruct, use randomnumer, etc.
 - Locating call sites that could perform reentrancy and possible reentrancy targets.
 - overview
 
@@ -18,7 +18,7 @@ A attacker contract hunter for detecting reentrancy attacks and real exploitable
 
 ## Code Structure
 
-- `gigahorse-toolchain`: refer to Elipmoc github repo [gigahorse-toolchain](https://github.com/nevillegrech/gigahorse-toolchain), with a self-defined datalog file `leslie.dl` (named for memorizing *Leslie Cheung*).
+- `gigahorse-toolchain`: refer to Elipmoc github repo [gigahorse-toolchain](https://github.com/nevillegrech/gigahorse-toolchain), with a self-defined datalog file `leslie.dl` (named for memorizing *Leslie Cheung*). We now update the gigahorse at commit [7d0faaa](https://github.com/nevillegrech/gigahorse-toolchain/tree/7d0faaa5a764cba65cf6e27344930da36d848d9f).
 - `contract.py`: fetch and decompile contract bytecode to extract flow information (e.g., function external calls) during intra-procedure analysis.
 - `flow_analysis.py`: construct xCFG and xCG for dataflow analysis during tracing all possible call chains, and identify possible reentrancy path and reentrancy call target.
 - `global_params.py`: global params for analysis.
@@ -33,13 +33,15 @@ A attacker contract hunter for detecting reentrancy attacks and real exploitable
 - Python dependencies: please use pip to install dependencies in `requirements.txt`.
 
   ```shell
-    pip3 install -r requirements.txt
+    $conda create -n leslie python=3.8
+    $conda activate leslie
+    $pip3 install -r requirements.txt
   ```
 
 2. Demo test:
 
    ```shell
-   python3 blockwatchdog.py -la 0x10C509AA9ab291C76c45414e7CdBd375e1D5AcE8
+   $python3 blockwatchdog.py -la 0x10C509AA9ab291C76c45414e7CdBd375e1D5AcE8
    ```
 
    It woul take minutes to show the result in the console, and there will be a json file to store the results in the output directory with detailed recovered call chains.
