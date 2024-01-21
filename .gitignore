@@ -2,7 +2,7 @@ __pycache__
 
 */gigahorse-toolchain/.temp
 */gigahorse-toolchain/cache
-# */gigahorse-toolchain/contracts
+*/gigahorse-toolchain/contracts
 */gigahorse-toolchain/res
 */gigahorse-toolchain/*.out
 */gigahorse-toolchain/results.json
@@ -11,3 +11,5 @@ __pycache__
 .vscode
 
 .DS_Store
+
+output/

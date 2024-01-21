@@ -1,7 +1,8 @@
 import logging
-import pandas as pd
 import os
-from global_params import *
+
+import global_params
+import pandas as pd
 
 log = logging.getLogger(__name__)
 
@@ -139,7 +140,7 @@ class FlowAnalysis:
                 if "__function_selector__" in key:
                     temp_funcSign = "__function_selector__"
                 loc = (
-                    OUTPUT_PATH
+                    global_params.OUTPUT_PATH
                     + ".temp/"
                     + temp_address
                     + "/out/Leslie_SensitiveOpOfBadRandomnessAfterExternalCall.csv"
@@ -159,7 +160,7 @@ class FlowAnalysis:
                 temp_address = key.split("_")[2]
                 temp_funcSign = key.split("_")[3]
                 loc = (
-                    OUTPUT_PATH
+                    global_params.OUTPUT_PATH
                     + ".temp/"
                     + temp_address
                     + "/out/Leslie_EnvVarFlowsToTaintedVar.csv"
@@ -181,7 +182,7 @@ class FlowAnalysis:
                 if "__function_selector__" in key:
                     temp_funcSign = "__function_selector__"
                 loc = (
-                    OUTPUT_PATH
+                    global_params.OUTPUT_PATH
                     + ".temp/"
                     + temp_address
                     + "/out/Leslie_Op_CreateInLoop.csv"
@@ -203,7 +204,7 @@ class FlowAnalysis:
                 if "__function_selector__" in key:
                     temp_funcSign = "__function_selector__"
                 loc = (
-                    OUTPUT_PATH
+                    global_params.OUTPUT_PATH
                     + ".temp/"
                     + temp_address
                     + "/out/Leslie_Op_SoleCreate.csv"
@@ -225,7 +226,7 @@ class FlowAnalysis:
                 if "__function_selector__" in key:
                     temp_funcSign = "__function_selector__"
                 loc = (
-                    OUTPUT_PATH
+                    global_params.OUTPUT_PATH
                     + ".temp/"
                     + temp_address
                     + "/out/Leslie_Op_Selfdestruct.csv"
@@ -245,7 +246,7 @@ class FlowAnalysis:
                 temp_address = key.split("_")[2]
                 temp_funcSign = key.split("_")[3]
                 loc = (
-                    OUTPUT_PATH
+                    global_params.OUTPUT_PATH
                     + ".temp/"
                     + temp_address
                     + "/out/Leslie_ExternalCallInHook.csv"
@@ -265,7 +266,7 @@ class FlowAnalysis:
                 temp_address = key.split("_")[2]
                 temp_funcSign = key.split("_")[3]
                 loc = (
-                    OUTPUT_PATH
+                    global_params.OUTPUT_PATH
                     + ".temp/"
                     + temp_address
                     + "/out/Leslie_ExternalCallInFallback.csv"
@@ -273,6 +274,46 @@ class FlowAnalysis:
                 if os.path.exists(loc) and (os.path.getsize(loc) > 0):
                     df = pd.read_csv(loc, header=None, sep="	")
                     df.columns = ["callStmt", "funcSign"]
+                    # it is not neccessary to label the func, just focus on the callStmt
+                    df = df.loc[df["funcSign"] == temp_funcSign]
+                    if len(df) != 0:
+                        return True
+        return False
+
+    def double_call_to_same_contract(self):
+        for key in self.contracts.keys():
+            if self.contracts[key].level == 0:
+                temp_address = key.split("_")[2]
+                temp_funcSign = key.split("_")[3]
+                loc = (
+                    global_params.OUTPUT_PATH
+                    + ".temp/"
+                    + temp_address
+                    + "/out/Leslie_DoubleCallToSameContract.csv"
+                )
+                if os.path.exists(loc) and (os.path.getsize(loc) > 0):
+                    df = pd.read_csv(loc, header=None, sep="	")
+                    df.columns = ["funcSign", "callee"]
+                    # it is not neccessary to label the func, just focus on the callStmt
+                    df = df.loc[df["funcSign"] == temp_funcSign]
+                    if len(df) != 0:
+                        return True
+        return False
+
+    def double_call_to_same_contract_by_storage(self):
+        for key in self.contracts.keys():
+            if self.contracts[key].level == 0:
+                temp_address = key.split("_")[2]
+                temp_funcSign = key.split("_")[3]
+                loc = (
+                    global_params.OUTPUT_PATH
+                    + ".temp/"
+                    + temp_address
+                    + "/out/Leslie_DoubleCallToSameContractByStorage.csv"
+                )
+                if os.path.exists(loc) and (os.path.getsize(loc) > 0):
+                    df = pd.read_csv(loc, header=None, sep="	")
+                    df.columns = ["funcSign", "slot", "low", "high"]
                     # it is not neccessary to label the func, just focus on the callStmt
                     df = df.loc[df["funcSign"] == temp_funcSign]
                     if len(df) != 0:
@@ -287,7 +328,7 @@ class FlowAnalysis:
                 if "__function_selector__" in key:
                     temp_funcSign = "__function_selector__"
                 loc = (
-                    OUTPUT_PATH
+                    global_params.OUTPUT_PATH
                     + ".temp/"
                     + temp_address
                     + "/out/Leslie_SensitiveOpOfDoSAfterExternalCall.csv"
@@ -309,7 +350,12 @@ class FlowAnalysis:
 
     # source (actively spread the taint)
     def get_func_rets_flow_from_sources(self, contract_addr, func_sign):
-        loc = OUTPUT_PATH + ".temp/" + contract_addr + "/out/Leslie_TaintedFuncRet.csv"
+        loc = (
+            global_params.OUTPUT_PATH
+            + ".temp/"
+            + contract_addr
+            + "/out/Leslie_TaintedFuncRet.csv"
+        )
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
             df = pd.read_csv(loc, header=None, sep="	")
             df.columns = ["funcSign", "retIndex", "ret"]
@@ -323,7 +369,12 @@ class FlowAnalysis:
 
     def get_call_args_flow_from_sources(self, contract_addr, func_sign):
         call_args = []
-        loc = OUTPUT_PATH + ".temp/" + contract_addr + "/out/Leslie_TaintedCallArg.csv"
+        loc = (
+            global_params.OUTPUT_PATH
+            + ".temp/"
+            + contract_addr
+            + "/out/Leslie_TaintedCallArg.csv"
+        )
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
             df = pd.read_csv(loc, header=None, sep="	")
             df.columns = ["funcSign", "callStmt", "callArgIndex"]
@@ -394,7 +445,7 @@ class FlowAnalysis:
         callsites = []
         sensitive_callsigs = []
         loc = (
-            OUTPUT_PATH
+            global_params.OUTPUT_PATH
             + ".temp/"
             + contract_addr
             + "/out/Leslie_CallRetToSensitiveVar.csv"
@@ -430,7 +481,7 @@ class FlowAnalysis:
         func_args = []
         sensitive_callsigs = []
         loc = (
-            OUTPUT_PATH
+            global_params.OUTPUT_PATH
             + ".temp/"
             + contract_addr
             + "/out/Leslie_FuncArgToSensitiveVar.csv"
@@ -509,7 +560,7 @@ class FlowAnalysis:
     # spread: only functions as variable pass and transfer
     def spread_callRet_funcRet(self, contract_addr, call_stmt, func_sign, ret_index):
         loc = (
-            OUTPUT_PATH
+            global_params.OUTPUT_PATH
             + ".temp/"
             + contract_addr
             + "/out/Leslie_Spread_CallRetToFuncRet.csv"
@@ -539,7 +590,7 @@ class FlowAnalysis:
     def spread_callRet_CallArg(self, contract_addr, call_stmt, ret_index):
         callArgs = []
         loc = (
-            OUTPUT_PATH
+            global_params.OUTPUT_PATH
             + ".temp/"
             + contract_addr
             + "/out/Leslie_Spread_CallRetToCallArg.csv"
@@ -569,7 +620,7 @@ class FlowAnalysis:
     def spread_funcArg_callArg(self, contract_addr, funcSign, funcArgIndex):
         callArgs = []
         loc = (
-            OUTPUT_PATH
+            global_params.OUTPUT_PATH
             + ".temp/"
             + contract_addr
             + "/out/Leslie_Spread_FuncArgToCallArg.csv"
@@ -599,7 +650,7 @@ class FlowAnalysis:
     def spread_funcArg_callee(self, contract_addr, funcSign, funcArgIndex):
         callArgs = []
         loc = (
-            OUTPUT_PATH
+            global_params.OUTPUT_PATH
             + ".temp/"
             + contract_addr
             + "/out/Leslie_Spread_FuncArgToCalleeVar.csv"
@@ -628,7 +679,7 @@ class FlowAnalysis:
 
     def spread_funcArg_funcRet(self, contract_addr, funcSign, funcArgIndex):
         loc = (
-            OUTPUT_PATH
+            global_params.OUTPUT_PATH
             + ".temp/"
             + contract_addr
             + "/out/Leslie_Spread_FuncArgToFuncRet.csv"
@@ -674,12 +725,12 @@ class FlowAnalysis:
             # log.info(child_contract.logic_addr)
             # log.info(child_contract.caller)
             # log.info(child_contract.func_sign)
-        except:
+        except Exception:
             return next_pps
 
         # apply spread transfer for func_ret and call_arg, respectively
         if pp["type"] == "func_ret":
-            if parent_contract != None:
+            if parent_contract is not None:
                 indexes = self.spread_callRet_funcRet(
                     pp["caller"], pp["callsite"], parent_contract.func_sign, pp["index"]
                 )
@@ -737,7 +788,7 @@ class FlowAnalysis:
                     callArg["callStmt"], child_contract.external_calls
                 )
                 # log.info(temp_result)
-                if temp_result != None:
+                if temp_result is not None:
                     temp_caller, temp_logic_addr, temp_func_sign = temp_result
                 else:
                     continue
@@ -878,7 +929,12 @@ class FlowAnalysis:
                                     attack_reenter_info[i].append(res)
                             result = True
                             self.attack_matrix["reentrancy"] = True
-
+        if (
+            self.double_call_to_same_contract()
+            or self.double_call_to_same_contract_by_storage()
+        ):
+            self.attack_matrix["reentrancy"] = True
+            result = True
         self.victim_callback_info = victim_callback_info
         self.attack_reenter_info = attack_reenter_info
         return result, self.attack_matrix

@@ -1,16 +1,33 @@
 import logging
+
 from contract import Contract
 
 log = logging.getLogger(__name__)
 
 
 class CallGraph:
-    output = ""
-    visited_contracts = []
-    visited_funcs = []
-    max_level = 0
+    """
+    Represents a call graph for analyzing cross-contract function calls.
+
+    Attributes:
+        output (str): The output string representing the call graph.
+        visited_contracts (list): The list of visited contract addresses.
+        visited_funcs (list): The list of visited function signatures.
+        max_level (int): The maximum level of the call graph.
+        source (dict): The source contract information.
+        contracts (dict): The dictionary of contract information.
+        platform (str): The platform on which the contracts are deployed.
+    """
 
     def __init__(self, source, contracts, platform):
+        """
+        Initializes a new instance of the CallGraph class.
+
+        Args:
+            source (dict): The source contract information.
+            contracts (dict): The dictionary of contract information.
+            platform (str): The platform on which the contracts are deployed.
+        """
         self.source = source
         self.contracts = contracts
         self.output = ""
@@ -20,12 +37,27 @@ class CallGraph:
         self.platform = platform
 
     def get_contracts(self):
+        """
+        Returns the dictionary of contract information.
+
+        Returns:
+            dict: The dictionary of contract information.
+        """
         return self.contracts
 
     def get_output(self):
+        """
+        Returns the output string representing the call graph.
+
+        Returns:
+            str: The output string representing the call graph.
+        """
         return self.output
 
     def construct_cross_contract_call_graph(self):
+        """
+        Constructs the cross-contract call graph.
+        """
         source = self.source
         contracts = self.contracts
         pending = []

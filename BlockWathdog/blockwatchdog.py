@@ -1,18 +1,12 @@
 import argparse
-import sys
-import pandas as pd
-import os
-from datetime import datetime
-from web3 import Web3
+import json
+import logging
+import time
+
+import global_params
 from contract import Contract
 from flow_analysis import FlowAnalysis
-import time
-import multiprocessing
-import json
-from global_params import *
-import shutil
 from graph.call_graph import CallGraph
-import logging
 
 if __name__ == "__main__":
     # Main Body
@@ -122,7 +116,7 @@ if __name__ == "__main__":
     if is_createbin:
         max_call_depth = 0
         source = {
-            "platform": "ETH",
+            "platform": args.platform,
             "logic_addr": args.logic_addr,
             "storage_addr": storage_addr,
             "func_sign": "",
@@ -152,7 +146,7 @@ if __name__ == "__main__":
         # for every functions that contains external calls
         while len(external_call_in_func_sigature) > 0:
             source = {
-                "platform": "ETH",
+                "platform": args.platform,
                 "logic_addr": args.logic_addr,
                 "storage_addr": storage_addr,
                 "func_sign": "",
@@ -192,7 +186,7 @@ if __name__ == "__main__":
         "warning": "medium",
         "attack_matrix": {},
         "analysis_loc": "",
-        "platform": "ETH",
+        "platform": args.platform,
         "block_number": args.block_number,
         "time": None,
         "semantic_features": {
@@ -313,7 +307,7 @@ if __name__ == "__main__":
 
     print(res)
 
-    store_path = JSON_PATH + args.logic_addr + ".json"
+    store_path = global_params.JSON_PATH + args.logic_addr + ".json"
     # uncomment if not need to rewrite
     # if not os.path.exists(store_path):
     with open(store_path, "w", encoding="utf-8") as f:

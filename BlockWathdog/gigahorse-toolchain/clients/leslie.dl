@@ -99,6 +99,8 @@ Leslie_ExternalCallInHook(callStmt, funcSign) :-
   Leslie_ExternalCallInfo(func,callStmt,_,_,_,_),
   (sigText = "tokensReceived(bytes4,bytes32,address,address,address,uint256,bytes,bytes)";
   sigText = "transferFrom(address,address,uint256)";
+  // sigText = "transfer(address,address,uint256)";
+  sigText = "depositLp(uint256,uint256)";
   sigText = "tokensToSend(address,address,address,uint256,bytes,bytes)";
   sigText = "onERC721Received(address,address,uint256,bytes)";
   sigText = "onERC1155Received(address,address,uint256,uint256,bytes)";
@@ -107,6 +109,27 @@ Leslie_ExternalCallInHook(callStmt, funcSign) :-
   sigText = "onTokenTransfer(address,uint256,bytes)";
   sigText = "onFlashLoan(address,address,uint256,uint256,bytes)";
   sigText = "uniswapV2Call(address,uint256,uint256,bytes)").
+
+Leslie_ExternalCallInHook(callStmt, funcSign) :-
+  funcSign = "0xeeeeeeee",
+  Leslie_FunctionSelector(func, funcSign),
+  Leslie_ExternalCallInfo(func,callStmt,_,_,_,_).
+
+.decl Leslie_DoubleCallToSameContract(funcSign:symbol, callee:Value)
+.output Leslie_DoubleCallToSameContract
+Leslie_DoubleCallToSameContract(funcSign, callee) :-
+  Leslie_ExternalCall_Callee_ConstType(func1, _, callee),
+  Leslie_ExternalCallInHook(callStmt2, funcSign),
+  Leslie_ExternalCall_Callee_ConstType(func2, callStmt2, callee),
+  func1 != func2. 
+
+.decl Leslie_DoubleCallToSameContractByStorage(funcSign:symbol, storageSlot:symbol, byteLow:number, byteHigh:number)
+.output Leslie_DoubleCallToSameContractByStorage
+Leslie_DoubleCallToSameContractByStorage(funcSign, storageSlot, byteLow, byteHigh) :-
+  Leslie_ExternalCall_Callee_StorageType(func1, _, storageSlot, byteLow, byteHigh),
+  Leslie_ExternalCallInHook(callStmt2, funcSign),
+  Leslie_ExternalCall_Callee_StorageType(func2, callStmt2, storageSlot, byteLow, byteHigh),
+  func1 != func2. 
 
 .decl Leslie_ExternalCallInFallback(callStmt:Statement, funcSign:symbol)
 .output Leslie_ExternalCallInFallback

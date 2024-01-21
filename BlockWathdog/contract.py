@@ -1,14 +1,15 @@
 import logging
-import pandas as pd
 import os
-from datetime import datetime
+
+import pandas as pd
 from web3 import Web3
-from global_params import *
+
+import global_params
 
 log = logging.getLogger(__name__)
 
 
-# Data structure of contracts in the tracing process
+# Data structure of contracts in the tr}
 class Contract:
     def __init__(
         self,
@@ -64,11 +65,11 @@ class Contract:
     def analyze(self):
         self.set_url()
         self.download_bytecode()
-        if os.path.exists(CONTRACT_PATH + self.logic_addr + ".hex"):
+        if os.path.exists(global_params.CONTRACT_PATH + self.logic_addr + ".hex"):
             self.analyze_contract()
             self.set_func()
             self.set_callArgVals()
-            if self.origin == True:
+            if self.origin is True:
                 for func in self.func_sign_dict.keys():
                     self.set_external_calls(func, self.func_sign_dict[func])
             else:
@@ -83,19 +84,26 @@ class Contract:
             self.url = (
                 "wss://bsc.getblock.io/6bf31e7d-f5b2-4860-8e15-aa9a11f6533d/mainnet/"
             )
+        elif self.platform == "Fantom":
+            self.url = "https://practical-long-energy.fantom.discover.quiknode.pro/fc97af1ebab40f57ea698b6cf3dd67a2d24cac1a/"
         else:
             self.url = ""
+        if self.url.startswith("https"):
+            w3 = Web3(Web3.HTTPProvider(self.url))
+        else:
+            w3 = Web3(Web3.WebsocketProvider(self.url))
+        self.block_number = w3.eth.get_block_number()
 
     def download_bytecode(self):
         if self.url == "":
             return
-        loc = CONTRACT_PATH + self.logic_addr + ".hex"
+        loc = global_params.CONTRACT_PATH + self.logic_addr + ".hex"
         if os.path.exists(loc):
             with open(loc, "r") as f:
                 bin = f.read()
                 if bin == "0x":
                     bin_content = (
-                        CONTRACT_PATH
+                        global_params.CONTRACT_PATH
                         + "createbin/"
                         + self.logic_addr
                         + "_createbin.hex"
@@ -128,7 +136,7 @@ class Contract:
         # use leslie client to analyze the contract
         command = (
             "cd ./gigahorse-toolchain && ./gigahorse.py -C ./clients/leslie.dl "
-            + CONTRACT_DIR
+            + global_params.CONTRACT_DIR
             + "{contract_addr}.hex >/dev/null 2>&1"
         )
         os.system(command.format(contract_addr=self.logic_addr))
@@ -143,7 +151,7 @@ class Contract:
             df = pd.read_csv(loc, header=None, sep="	")
             df.columns = ["func", "funcSign"]
             # store all funcs and their signatures
-            if self.origin == True:
+            if self.origin is True:
                 funcs = []
                 func_signs = []
                 for func in df["func"]:
@@ -157,12 +165,12 @@ class Contract:
                     self.func = list(df.loc[df["funcSign"] == self.func_sign, "func"])[
                         0
                     ]
-                except:
+                except Exception:
                     try:
                         self.func = list(
                             df.loc[df["funcSign"] == "0x00000000", "func"]
                         )[0]
-                    except:
+                    except Exception:
                         None
 
     def set_callArgVals(self):
@@ -215,11 +223,16 @@ class Contract:
                 "numArg",
                 "numRet",
             ]
-            df_external_call = df_external_call.loc[df_external_call["func"] == func]
+            try:
+                df_external_call = df_external_call.loc[
+                    df_external_call["func"] == func
+                ]
+            except Exception:
+                pass
         else:
             df_external_call = pd.DataFrame()
 
-        if self.origin == True:
+        if self.origin is True:
             for i in range(len(df_external_call)):
                 func = df_external_call.iloc[i]["func"]
                 # find functions with external calls
@@ -334,20 +347,59 @@ class Contract:
                     df_callee_storage["callStmt"] == call_stmt
                 ]
                 if len(df_temp) > 0:
-                    external_call["logic_addr"] = self.get_storage_content(
-                        list(df_temp["storageSlot"])[0],
-                        list(df_temp["byteLow"])[0],
-                        list(df_temp["byteHigh"])[0],
-                    )
+                    if self.storage_addr in global_params.STORAGE_SPACE.keys():
+                        if (
+                            list(df_temp["storageSlot"])[0]
+                            in global_params.STORAGE_SPACE[self.storage_addr].keys()
+                        ):
+                            external_call["logic_addr"] = global_params.STORAGE_SPACE[
+                                self.storage_addr
+                            ][list(df_temp["storageSlot"])[0]]
+                        else:
+                            external_call["logic_addr"] = self.get_storage_content(
+                                list(df_temp["storageSlot"])[0],
+                                list(df_temp["byteLow"])[0],
+                                list(df_temp["byteHigh"])[0],
+                            )
+                            global_params.STORAGE_SPACE[self.storage_addr][
+                                list(df_temp["storageSlot"])[0]
+                            ] = external_call["logic_addr"]
+                    else:
+                        global_params.STORAGE_SPACE[self.storage_addr] = {}
+                        external_call["logic_addr"] = self.get_storage_content(
+                            list(df_temp["storageSlot"])[0],
+                            list(df_temp["byteLow"])[0],
+                            list(df_temp["byteHigh"])[0],
+                        )
+                        global_params.STORAGE_SPACE[self.storage_addr][
+                            list(df_temp["storageSlot"])[0]
+                        ] = external_call["logic_addr"]
 
             if len(df_callee_storage_proxy) != 0:
                 df_temp = df_callee_storage_proxy.loc[
                     df_callee_storage_proxy["callStmt"] == call_stmt
                 ]
                 if len(df_temp) > 0:
-                    external_call["logic_addr"] = self.get_storage_content(
-                        list(df_temp["storageSlot"])[0], 0, 19
-                    )
+                    if self.storage_addr in global_params.STORAGE_SPACE.keys():
+                        if (
+                            list(df_temp["storageSlot"])[0]
+                            in global_params.STORAGE_SPACE[self.storage_addr].keys()
+                        ):
+                            external_call["logic_addr"] = global_params.STORAGE_SPACE[
+                                self.storage_addr
+                            ][list(df_temp["storageSlot"])[0]]
+                        else:
+                            external_call["logic_addr"] = self.get_storage_content(
+                                list(df_temp["storageSlot"])[0], 0, 19
+                            )
+                            global_params.STORAGE_SPACE[self.storage_addr][
+                                list(df_temp["storageSlot"])[0]
+                            ] = external_call["logic_addr"]
+                    else:
+                        global_params.STORAGE_SPACE[self.storage_addr] = {}
+                        external_call["logic_addr"] = self.get_storage_content(
+                            list(df_temp["storageSlot"])[0], 0, 19
+                        )
 
             # find callee got from the func arg, and try to recover the know args
             if len(df_callee_funarg) != 0:
@@ -382,5 +434,4 @@ class Contract:
                 df_temp = df_fs_proxy.loc[df_fs_proxy["callStmt"] == call_stmt]
                 if len(df_temp) > 0:
                     external_call["funcSign"] = func_sign
-
             self.external_calls.append(external_call)
