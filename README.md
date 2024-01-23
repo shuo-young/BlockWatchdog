@@ -4,6 +4,8 @@
 ![Static Badge](<https://img.shields.io/badge/dev-rust_version_(lydia)_undergoing-red>)
 ![Static Badge](https://img.shields.io/badge/docker_image-v0.1-navy)
 
+News: A Rust implementation _*Lydia*_ (>10% faster) is [here](https://github.com/shuo-young/lydia).
+
 ## Description
 
 A attacker contract hunter for detecting reentrancy attacks and real exploitable victim contracts.
