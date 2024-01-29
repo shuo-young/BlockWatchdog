@@ -40,7 +40,7 @@ RUN chmod -R o+rwx /opt/blockwatchdog
 USER blockwatchdog
 
 # Souffle-addon bare-minimum make
-RUN cd /opt/blockwatchdog/gigahorse-toolchain/souffle-addon && make libsoufflenum.so
+RUN cd /opt/blockwatchdog/gigahorse-toolchain/souffle-addon && make
 RUN cd /opt/blockwatchdog && pip3 install -r requirements.txt
 
 WORKDIR /opt/blockwatchdog
