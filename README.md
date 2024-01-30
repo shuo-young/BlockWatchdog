@@ -14,25 +14,6 @@
 
 <!-- <img alt="GitHub forks" src="https://img.shields.io/github/stars/NFTDefects/nftdefects"> -->
 
-  <!-- <a href="https://twitter.com/shall_yangshuo" target="_blank">
-    <img alt="Twitter: shall\_yangshuo" src="https://img.shields.io/twitter/follow/shall_yangshuo.svg?style=social" />
-  </a> -->
-</p>
-
-<!-- Improved compatibility of back to top link: See: https://github.com/othneildrew/Best-README-Template/pull/73 -->
-
-<!-- <a name="readme-top"></a>
-
-[![Contributors][contributors-shield]][contributors-url]
-[![Forks][forks-shield]][forks-url]
-[![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
-[![MIT License][license-shield]][license-url] -->
-
-<!-- [![LinkedIn][linkedin-shield]][linkedin-url] -->
-
-<!-- [![Commit][][commit-total] -->
-
 > News: A Rust implementation _*Lydia*_ (>10% faster) is [here](https://github.com/shuo-young/lydia).
 
 <!-- PROJECT LOGO -->
@@ -116,7 +97,7 @@ pip3 install -r requirements.txt
 
 ```sh
 docker build -t BlockWatchdog:v0.1 .
-docker pull ghcr.io/shuo-young/BlockWatchdog:latest
+docker pull ghcr.io/shuo-young/blockwatchdog:latest
 ```
 
 ## Usage
@@ -132,7 +113,7 @@ python3 blockwatchdog.py -la 0x10C509AA9ab291C76c45414e7CdBd375e1D5AcE8
 For the docker image, run with the following command.
 
 ```sh
-docker run BlockWatchdog:latest -la 0x10C509AA9ab291C76c45414e7CdBd375e1D5AcE8 -bp ETH -bn 16000000
+docker run ghcr.io/shuo-young/blockwatchdog:latest -la 0x10C509AA9ab291C76c45414e7CdBd375e1D5AcE8 -bp ETH -bn 16000000
 ```
 
 ## Code Structure
@@ -147,12 +128,12 @@ docker run BlockWatchdog:latest -la 0x10C509AA9ab291C76c45414e7CdBd375e1D5AcE8 -
 ## Features
 
 -   Recover all possible call chains in attacker contract (each public function).
--   Report critical attack semantic, e.g., call in hook functions, selfdestruct, use randomnumer, creation (sole and multi) etc.
+-   Report critical attack semantics, e.g., call in hook functions, selfdestruct, use randomnumer, creation (sole and multi) etc.
 -   Locating call sites that could perform reentrancy and possible reentrancy targets.
 
 ## Publication
 
-This repository was proposed in the [ICSE'24 paper](<(https://dl.acm.org/doi/10.1145/3597503.3639153).>) _*Uncover the Premeditated Attacks: Detecting Exploitable Reentrancy Vulnerabilities by Identifying Attacker Contracts*_, and we would really appreciate for your citation if this repo helps you.
+This repository was proposed in the [ICSE'24 paper](https://dl.acm.org/doi/10.1145/3597503.3639153) _*Uncover the Premeditated Attacks: Detecting Exploitable Reentrancy Vulnerabilities by Identifying Attacker Contracts*_, and we would really appreciate for your citation if this repo helps you.
 
 ## Contact
 
