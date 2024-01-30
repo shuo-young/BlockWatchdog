@@ -52,7 +52,7 @@ results.json
 *_compiled
 *_compiled
 *.ccerr
-*.cpp
+# *.cpp
 
 # testing files
 .tests/**
