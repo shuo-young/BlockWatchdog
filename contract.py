@@ -77,21 +77,14 @@ class Contract:
 
     def set_url(self):
         if self.platform == "ETH":
-            self.url = (
-                "https://eth-mainnet.g.alchemy.com/v2/6t0LpEw9cr0OlGIVTFqs92aOIkfhktMk"
-            )
+            self.url = "https://eth-mainnet.g.alchemy.com/v2/6t0LpEw9cr0OlGIVTFqs92aOIkfhktMk"  # backup: https://eth-mainnet.g.alchemy.com/v2/6t0LpEw9cr0OlGIVTFqs92aOIkfhktMk
         elif self.platform == "BSC":
-            self.url = (
-                "wss://bsc.getblock.io/6bf31e7d-f5b2-4860-8e15-aa9a11f6533d/mainnet/"
-            )
-        elif self.platform == "Fantom":
+            self.url = "https://go.getblock.io/3937fb5368654fe38d1736304fa584c3"
+        elif self.platform == "FTM":
             self.url = "https://practical-long-energy.fantom.discover.quiknode.pro/fc97af1ebab40f57ea698b6cf3dd67a2d24cac1a/"
         else:
             self.url = ""
-        if self.url.startswith("https"):
-            w3 = Web3(Web3.HTTPProvider(self.url))
-        else:
-            w3 = Web3(Web3.WebsocketProvider(self.url))
+        w3 = Web3(Web3.HTTPProvider(self.url))
         self.block_number = w3.eth.get_block_number()
 
     def download_bytecode(self):

@@ -132,6 +132,7 @@ class FlowAnalysis:
                 )
         return
 
+    # find other attack matrix
     def intraprocedural_br_analysis(self):
         for key in self.contracts.keys():
             if self.contracts[key].level == 0:
@@ -240,6 +241,7 @@ class FlowAnalysis:
                         return True
         return False
 
+    # possible features of attacker contracts
     def externalcall_inhook(self):
         for key in self.contracts.keys():
             if self.contracts[key].level == 0:
@@ -314,6 +316,26 @@ class FlowAnalysis:
                 if os.path.exists(loc) and (os.path.getsize(loc) > 0):
                     df = pd.read_csv(loc, header=None, sep="	")
                     df.columns = ["funcSign", "slot", "low", "high"]
+                    # it is not neccessary to label the func, just focus on the callStmt
+                    df = df.loc[df["funcSign"] == temp_funcSign]
+                    if len(df) != 0:
+                        return True
+        return False
+
+    def preset_call_in_standard_erc20_transfer(self):
+        for key in self.contracts.keys():
+            if self.contracts[key].level == 0:
+                temp_address = key.split("_")[2]
+                temp_funcSign = key.split("_")[3]
+                loc = (
+                    global_params.OUTPUT_PATH
+                    + ".temp/"
+                    + temp_address
+                    + "/out/Leslie_CallInStandardTransfer.csv"
+                )
+                if os.path.exists(loc) and (os.path.getsize(loc) > 0):
+                    df = pd.read_csv(loc, header=None, sep="	")
+                    df.columns = ["funcSign", "callStmt", "storageSlot"]
                     # it is not neccessary to label the func, just focus on the callStmt
                     df = df.loc[df["funcSign"] == temp_funcSign]
                     if len(df) != 0:
@@ -932,6 +954,7 @@ class FlowAnalysis:
         if (
             self.double_call_to_same_contract()
             or self.double_call_to_same_contract_by_storage()
+            or self.preset_call_in_standard_erc20_transfer()
         ):
             self.attack_matrix["reentrancy"] = True
             result = True

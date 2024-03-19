@@ -131,6 +131,14 @@ Leslie_DoubleCallToSameContractByStorage(funcSign, storageSlot, byteLow, byteHig
   Leslie_ExternalCall_Callee_StorageType(func2, callStmt2, storageSlot, byteLow, byteHigh),
   func1 != func2. 
 
+.decl Leslie_CallInStandardTransfer(funcSign:symbol, callStmt: Statement, storageSlot: symbol)
+.output Leslie_CallInStandardTransfer
+Leslie_CallInStandardTransfer(funcSign, callStmt, storageSlot) :-
+  Leslie_FunctionSelector(func, funcSign),
+  Leslie_Statement_Function(callStmt, func),
+  Leslie_ExternalCall_Callee_StorageType(func, callStmt, storageSlot, _, _),
+  funcSign = "0xa9059cbb".
+
 .decl Leslie_ExternalCallInFallback(callStmt:Statement, funcSign:symbol)
 .output Leslie_ExternalCallInFallback
 Leslie_ExternalCallInFallback(callStmt, funcSign) :-

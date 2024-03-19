@@ -264,9 +264,9 @@ if __name__ == "__main__":
     result["sensitive_callsigs"] = list(set(sensitive_callsigs))
 
     result["contract_funcsigs"] = func_sign_list
-    result[
-        "contract_funcsigs_external_call"
-    ] = store_external_call_in_func_sigature_list
+    result["contract_funcsigs_external_call"] = (
+        store_external_call_in_func_sigature_list
+    )
 
     # find whether there is a callback to the function that contains external call
     overlap = list(
