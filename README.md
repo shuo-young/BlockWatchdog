@@ -122,4 +122,4 @@ This repository was proposed in the ICSE'24 paper: _*Uncover the Premeditated At
 ## License
 
 Copyright © 2024 [Shuo Yang](https://github.com/shuo-young).<br />
-This project is [Apache](https://github.com/NFTDefects/nftdefects/blob/master/LICENSE) licensed.
+This project is [Apache](https://github.com/shuo-young/BlockWatchdog/blob/master/LICENSE) licensed.
