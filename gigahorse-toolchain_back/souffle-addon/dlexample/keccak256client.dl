@@ -1,0 +1,7 @@
+#include "../functor_includes.dl"
+
+.decl Hash(a: symbol, b: symbol)
+.output Hash
+
+Hash("a", hash) :- hash = @keccak_256("a").
+Hash("transfer(address,uint256)", hash) :- hash = @keccak_256("transfer(address,uint256)").

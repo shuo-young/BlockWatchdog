@@ -1,0 +1,10 @@
+#include "../functor_includes.dl"
+
+.decl A(x:symbol)
+.input A
+.decl B(x:symbol)
+.input B
+.decl O(x:symbol,y:symbol,z:symbol)
+.output O
+
+O(x,y,@sar_256(x,y)) :- A(x), B(y).

@@ -1,0 +1,39 @@
+#include "functor_includes.dl"
+
+
+.decl TestCat(list1: StringList, list2: StringList, res: StringList)
+.output TestCat
+
+TestCat(nil, nil, @list_concat(nil, nil)):-
+  nil = @list_concat(nil, nil).
+
+TestCat(a, b, @list_concat(a, b)):-
+  b = nil,
+  a = @list_append(nil, "aaa"), a = ["aaa", nil],
+  @list_concat(a, b) = a.
+
+TestCat(a, b, @list_concat(a, b)):-
+  a = nil,
+  b = @list_append(nil, "bbb"), b = ["bbb", nil],
+  @list_concat(a, b) = b.
+
+TestCat(a, b, @list_concat(a, b)):-
+  a = @list_append(nil, "aaa"), a = ["aaa", nil],
+  b = @list_append(@list_append(nil, "bbb"), "ccc"), b = ["bbb", ["ccc", nil]].
+
+
+TestCat(a, b, @list_concat(a, b)):-
+  a = @list_append(@list_append(nil, "aaa"), "bbb"), a = ["aaa", ["bbb", nil]],
+  b = @list_append(nil, "ccc"), b = ["ccc", nil].
+
+TestCat(a, b, @list_concat(a, b)):-
+  a = @list_append(@list_append(nil, "aaa"), "bbb"), a = ["aaa", ["bbb", nil]],
+    b = @list_append(@list_append(nil, "ccc"), "ddd"), b = ["ccc", ["ddd", nil]].
+
+
+.decl TestAppend(list: StringList, item: symbol, res: StringList)
+.output TestAppend
+TestAppend(a, b, @list_append(a, b)):-
+  a = ["0x8d8", ["0xf48", ["0xd05", ["0xd4b", ["0x91d", nil]]]]],
+  b = "0x1457",
+  @list_append(a, b) =  ["0x8d8", ["0xf48", ["0xd05", ["0xd4b", ["0x91d", ["0x1457", nil]]]]]].

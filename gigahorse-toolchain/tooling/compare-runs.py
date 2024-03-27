@@ -26,6 +26,7 @@ analytics = {
 }
 
 decomp_analytics = {
+  'Analytics_PublicFunction': 'completeness',
   'Analytics_ReachableBlocks': 'completeness',
   'Analytics_UnreachableBlock': 'incompleteness',
   'Analytics_ReachableBlocksInTAC': 'completeness',
@@ -33,6 +34,7 @@ decomp_analytics = {
   'Analytics_DeadBlocks': 'imprecision',
   'Analytics_PolymorphicTargetSameCtx': 'imprecision',
   'Analytics_LocalBlockEdge': 'completeness',
+  'Analytics_MissingEdgeInTAC': 'completeness',
   'Analytics_StmtMissingOperand': 'incompleteness',
   'Analytics_PrivateFunctionMatchesMetadata': 'completeness',
   'Analytics_PrivateFunctionMatchesMetadataIncorrectArgs': 'imprecision',
@@ -48,6 +50,8 @@ decomp_analytics = {
 mem_analytics = {
   'Analytics_NonModeledMSTORE': 'incompleteness',
   'Analytics_NonModeledMLOAD': 'incompleteness',
+  'Analytics_CallToSignature': 'completeness',
+  'Analytics_EventSignature': 'completeness',
   'Analytics_PublicFunctionArg': 'completeness',
   'Analytics_PublicFunctionArrayArg': 'completeness'
 }
