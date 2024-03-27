@@ -40,6 +40,7 @@ class Contract:
         self.caller = caller
         self.call_site = call_site
         self.callArgVals = {}
+        self.knownArgVals = {}
         self.url = ""
         self.external_calls = []
         self.level = level
@@ -63,14 +64,28 @@ class Contract:
         return self.external_call_in_func_sigature
 
     def analyze(self):
+        logging.info("analyzing " + self.logic_addr)
+        logging.info("caller " + self.caller)
+        logging.info("call_site " + self.call_site)
+        logging.info("func_sign " + self.func_sign)
         self.set_url()
         self.download_bytecode()
         if os.path.exists(global_params.CONTRACT_PATH + self.logic_addr + ".hex"):
             self.analyze_contract()
             self.set_func()
+            print("sett call arg vals")
             self.set_callArgVals()
+            self.set_knownArgVals()
+            logging.info("call arg vals " + str(self.callArgVals))
+            logging.info("known arg vals " + str(self.knownArgVals))
             if self.origin is True:
+                if not self.createbin:
+                    # remove key 0x0 from the dict  func_sign_dict
+                    del self.func_sign_dict["0x0"]
                 for func in self.func_sign_dict.keys():
+                    logging.info(
+                        "set external calls in function " + self.func_sign_dict[func]
+                    )
                     self.set_external_calls(func, self.func_sign_dict[func])
             else:
                 self.set_external_calls(self.func, self.func_sign)
@@ -166,6 +181,7 @@ class Contract:
                     except Exception:
                         None
 
+    # add env var tracer (also known dynamically)
     def set_callArgVals(self):
         if self.caller != "":
             loc = (
@@ -182,6 +198,53 @@ class Contract:
                     temp_index = int(df.iloc[i]["argIndex"])
                     temp_callArgVal = df.iloc[i]["argVal"]
                     self.callArgVals[temp_index] = temp_callArgVal
+
+    def set_knownArgVals(self):
+        loc = (
+            "./gigahorse-toolchain/.temp/"
+            + self.logic_addr
+            + "/out/Leslie_ExternalCall_Known_Arg.csv"
+        )
+        if os.path.exists(loc) and (os.path.getsize(loc) > 0):
+            df = pd.read_csv(loc, header=None, sep="	")
+            df.columns = ["func", "callStmt", "argIndex", "argVal"]
+            # it is not neccessary to label the func, just focus on the callStmt
+            call_arg_vals = {}
+            for i in range(len(df)):
+                temp_index = int(df.iloc[i]["argIndex"])
+                temp_callArgVal = df.iloc[i]["argVal"]
+                call_arg_vals[temp_index] = temp_callArgVal
+                self.knownArgVals[df.iloc[i]["callStmt"]] = call_arg_vals
+
+        loc_env = (
+            "./gigahorse-toolchain/.temp/"
+            + self.logic_addr
+            + "/out/Leslie_ExternalCall_Known_Arg_Env.csv"
+        )
+
+        if os.path.exists(loc_env) and (os.path.getsize(loc_env) > 0):
+            df = pd.read_csv(loc_env, header=None, sep="	")
+            df.columns = ["func", "callStmt", "argIndex", "opcode"]
+            # it is not neccessary to label the func, just focus on the callStmt
+
+            for i in range(len(df)):
+                temp_index = int(df.iloc[i]["argIndex"])
+                env_op = df.iloc[i]["opcode"]
+                if env_op == "CALLER":
+                    temp_callArgVal = self.caller
+                elif env_op == "ADDRESS":
+                    temp_callArgVal = self.logic_addr
+                elif env_op == "ORIGIN":
+                    temp_callArgVal = "MSG.SENDER"
+                if df.iloc[i]["callStmt"] in self.knownArgVals.keys():
+                    self.knownArgVals[df.iloc[i]["callStmt"]][
+                        temp_index
+                    ] = temp_callArgVal
+                else:
+                    self.knownArgVals[df.iloc[i]["callStmt"]] = {}
+                    self.knownArgVals[df.iloc[i]["callStmt"]][
+                        temp_index
+                    ] = temp_callArgVal
 
     # in some cases, the storage address is not the same as the logic address
     def get_storage_content(self, slot_index, byteLow, byteHigh):
@@ -321,11 +384,12 @@ class Contract:
             call_stmt = df_external_call.iloc[i]["callStmt"]
             # find target callee's logic address
             external_call = {
-                "logic_addr": "",
-                "storage_addr": "",
-                "funcSign": "",
-                "caller": "",
-                "call_site": "",
+                "logic_addr": "",  # target contract address
+                "storage_addr": "",  # target contract storage address
+                "funcSign": "",  # target function signature (after)
+                "caller": "",  # caller address (msg.sender for the origin) (current)
+                "call_site": "",  # external call site (current)
+                "known_args": {},  # record all known args from env and storage, etc.
             }
 
             if len(df_callee_const) != 0:
@@ -394,7 +458,7 @@ class Contract:
                             list(df_temp["storageSlot"])[0], 0, 19
                         )
 
-            # find callee got from the func arg, and try to recover the know args
+            # find callee got from the func arg (called by caller), and try to recover the know args
             if len(df_callee_funarg) != 0:
                 df_temp = df_callee_funarg.loc[
                     df_callee_funarg["callStmt"] == call_stmt
@@ -405,6 +469,10 @@ class Contract:
                         temp_index = int(list(df_temp["argIndex"])[0])
                         if temp_index in self.callArgVals.keys():
                             external_call["logic_addr"] = self.callArgVals[temp_index]
+
+            # record all args (const address, constants, and other env vars (e.g., msg.sender, address(this)))
+            if call_stmt in external_call["known_args"].keys():
+                external_call["known_args"] = self.knownArgVals[call_stmt]
 
             # to differentiate the delegatecall and normal call
             if df_external_call.iloc[i]["callOp"] == "DELEGATECALL":

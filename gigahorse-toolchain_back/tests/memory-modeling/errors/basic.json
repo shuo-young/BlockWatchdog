@@ -1,5 +1,0 @@
-{
-    "client_path": "clients/analytics_client.dl",
-    "gigahorse_args": ["-i", "--disable_inline"],
-    "expected_analytics": [["Analytics_RevertSigUsed", 2, 0]]
-}

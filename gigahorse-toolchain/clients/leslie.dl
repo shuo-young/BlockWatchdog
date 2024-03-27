@@ -463,7 +463,8 @@ Leslie_Env_Var(var, opcode) :-
 .output Leslie_ExternalCall_Known_Arg_Env
 Leslie_ExternalCall_Known_Arg_Env(func, callStmt, argIndex-1, opcode) :-
   Leslie_ExternalCallInfo(func, callStmt, _, _, _, _),
-  Leslie_Env_Var(arg, opcode),
+  Leslie_Env_Var(argFrom, opcode),
+  DataFlows(argFrom, arg),
   StatementUsesMemory_ActualMemoryArg(callStmt, _, argIndex, arg),
   argIndex != 0.
 
