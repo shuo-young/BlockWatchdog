@@ -454,6 +454,19 @@ Leslie_ExternalCall_Known_Arg(func, callStmt, argIndex-1, argVal) :-
   StatementUsesMemory_ActualMemoryArg(callStmt, _, argIndex, arg),
   argIndex != 0.
 
+.decl Leslie_Env_Var(var:Variable, opcode:Opcode)
+Leslie_Env_Var(var, opcode) :-
+  (CALLER(stmt, var);ORIGIN(stmt, var);ADDRESS(stmt, var)),
+  Statement_Opcode(stmt, opcode).
+
+.decl Leslie_ExternalCall_Known_Arg_Env(func:Function, callStmt:Statement, argIndex:number, opcode:Opcode)
+.output Leslie_ExternalCall_Known_Arg_Env
+Leslie_ExternalCall_Known_Arg_Env(func, callStmt, argIndex-1, opcode) :-
+  Leslie_ExternalCallInfo(func, callStmt, _, _, _, _),
+  Leslie_Env_Var(arg, opcode),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, argIndex, arg),
+  argIndex != 0.
+
 // !------Helper
 .decl Leslie_FunctionInfo(func:Function, funcSign:symbol, funcHighLevelName:symbol)
 .output Leslie_FunctionInfo
