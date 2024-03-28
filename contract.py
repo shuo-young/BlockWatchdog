@@ -11,6 +11,7 @@ log = logging.getLogger(__name__)
 
 # Data structure of contracts in the tr}
 class Contract:
+
     def __init__(
         self,
         platform,
@@ -21,6 +22,7 @@ class Contract:
         caller,
         call_site,
         level,
+        env_val=None,
     ):
         self.platform = platform
         self.logic_addr = self.format_addr(logic_addr)
@@ -46,6 +48,8 @@ class Contract:
         self.level = level
         self.createbin = False
         self.storage_space = {}
+        self.env_val = env_val
+        print("env_val: ", str(self.env_val))
         self.analyze()
 
     def format_addr(self, addr):
@@ -73,7 +77,7 @@ class Contract:
         if os.path.exists(global_params.CONTRACT_PATH + self.logic_addr + ".hex"):
             self.analyze_contract()
             self.set_func()
-            print("sett call arg vals")
+
             self.set_callArgVals()
             self.set_knownArgVals()
             logging.info("call arg vals " + str(self.callArgVals))
@@ -198,6 +202,9 @@ class Contract:
                     temp_index = int(df.iloc[i]["argIndex"])
                     temp_callArgVal = df.iloc[i]["argVal"]
                     self.callArgVals[temp_index] = temp_callArgVal
+            if self.env_val is not None:
+                for index in self.env_val.keys():
+                    self.callArgVals[index] = self.env_val[index]
 
     def set_knownArgVals(self):
         loc = (
@@ -213,8 +220,11 @@ class Contract:
             for i in range(len(df)):
                 temp_index = int(df.iloc[i]["argIndex"])
                 temp_callArgVal = df.iloc[i]["argVal"]
-                call_arg_vals[temp_index] = temp_callArgVal
-                self.knownArgVals[df.iloc[i]["callStmt"]] = call_arg_vals
+                temp_stmt = df.iloc[i]["callStmt"]
+                if temp_stmt not in self.knownArgVals.keys():
+                    self.knownArgVals[temp_stmt] = {}
+                self.knownArgVals[temp_stmt][temp_index] = temp_callArgVal
+            logging.info(self.knownArgVals)
 
         loc_env = (
             "./gigahorse-toolchain/.temp/"
@@ -465,13 +475,19 @@ class Contract:
                 ]
                 if len(df_temp) > 0:
                     # find the function that use the itself's public func args
-                    if list(df_temp["func"])[0] == list(df_temp["pubFun"])[0]:
-                        temp_index = int(list(df_temp["argIndex"])[0])
-                        if temp_index in self.callArgVals.keys():
-                            external_call["logic_addr"] = self.callArgVals[temp_index]
+                    for i in range(len(df_temp)):
+                        if list(df_temp["func"])[i] == list(df_temp["pubFun"])[i]:
+                            temp_index = int(list(df_temp["argIndex"])[i])
+                            if temp_index in self.callArgVals.keys():
+                                external_call["logic_addr"] = self.callArgVals[
+                                    temp_index
+                                ]
+                                logging.info(
+                                    "known target vals: ", external_call["logic_addr"]
+                                )
 
             # record all args (const address, constants, and other env vars (e.g., msg.sender, address(this)))
-            if call_stmt in external_call["known_args"].keys():
+            if call_stmt in self.knownArgVals.keys():
                 external_call["known_args"] = self.knownArgVals[call_stmt]
 
             # to differentiate the delegatecall and normal call

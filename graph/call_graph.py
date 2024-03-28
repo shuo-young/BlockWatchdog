@@ -125,6 +125,7 @@ class CallGraph:
                 temp["caller"],
                 temp["call_site"],
                 temp["level"],
+                temp["env_val"],
             )
             for external_call in contracts[temp_key].external_calls:
                 if (
@@ -143,5 +144,6 @@ class CallGraph:
                             "call_site": external_call["call_site"],
                             "level": temp["level"] + 1,
                             "caller_func_sign": temp["func_sign"],
+                            "env_val": external_call["known_args"],
                         }
                     )

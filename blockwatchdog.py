@@ -80,6 +80,7 @@ if __name__ == "__main__":
         "caller_func_sign": "",  # default trace all functions (with external calls)
         "call_site": "",  # default blank
         "level": 0,  # trace depth
+        "env_val": None,
     }
     begin = time.perf_counter()
 
@@ -94,6 +95,7 @@ if __name__ == "__main__":
         source["caller"],
         source["call_site"],
         source["level"],
+        source["env_val"],
     )
     func_sign_list = original_contract.get_func_sign_list()
     external_call_in_func_sigature = (
@@ -155,6 +157,7 @@ if __name__ == "__main__":
                 "caller_func_sign": "",
                 "call_site": "",
                 "level": 0,
+                "env_val": None,
             }
             # pop from left to right
             source["func_sign"] = external_call_in_func_sigature.pop(0)
