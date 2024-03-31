@@ -90,6 +90,53 @@ Leslie_TransferEtherCallInfo(func, callStmt, calleeVar) :-
   !StatementUsesMemory_ActualMemoryArg(callStmt, _, _, _),
   CALL(callStmt, _, calleeVar, _, _, _, _, _, _).
 
+// mark getAmountsIn (uniswap v2 pair token)
+.decl Leslie_getAmountIn(funcSign:symbol, callStmt:Statement, amountOut:Variable)
+.output Leslie_getAmountIn
+Leslie_getAmountIn(funcSign, callStmt, amountOut):-
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 1, amountOut),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, callFuncSigVar),
+  Variable_Value(callFuncSigVar,callFuncSig),
+  callFuncSig = "0x1f00ca74",
+  Leslie_FunctionSelector(func, funcSign),
+  Leslie_Statement_Function(callStmt, func),
+  (CALL(callStmt, _, calleeVar, _, _, _, _, _, _);STATICCALL(callStmt, _, calleeVar, _, _, _, _, _);DELEGATECALL(callStmt, _, calleeVar, _, _, _, _, _)).
+
+.decl Leslie_getAmountOut(funcSign:symbol, callStmt:Statement, amountIn:Variable)
+.output Leslie_getAmountOut
+Leslie_getAmountOut(funcSign, callStmt, amountIn):-
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 1, amountIn),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, callFuncSigVar),
+  Variable_Value(callFuncSigVar,callFuncSig),
+  callFuncSig = "0xd06ca61f",
+  Leslie_FunctionSelector(func, funcSign),
+  Leslie_Statement_Function(callStmt, func),
+  (CALL(callStmt, _, calleeVar, _, _, _, _, _, _);STATICCALL(callStmt, _, calleeVar, _, _, _, _, _);DELEGATECALL(callStmt, _, calleeVar, _, _, _, _, _)).
+
+// flashloan for token x info
+.decl Leslie_flashloanForTokenX(funcSign:symbol, callStmt:Statement, tokenIndex:number, tokenAmount:Variable, callFuncSig:symbol)
+.output Leslie_flashloanForTokenX
+Leslie_flashloanForTokenX(funcSign, callStmt, index, var, callFuncSig):-
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, callFuncSigVar),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, index, var),
+  Variable_Value(callFuncSigVar,callFuncSig),
+  callFuncSig = "0x22c0d9f", // 0x0 succincts to 0x
+  Leslie_FunctionSelector(func, funcSign),
+  Leslie_Statement_Function(callStmt, func),
+  (CALL(callStmt, _, calleeVar, _, _, _, _, _, _);STATICCALL(callStmt, _, calleeVar, _, _, _, _, _);DELEGATECALL(callStmt, _, calleeVar, _, _, _, _, _)).
+
+// tx.origin == 0x000000000
+.decl Leslie_StrictTxOriginCheck(funcSign:symbol, checkStmt:Statement)
+.output Leslie_StrictTxOriginCheck
+Leslie_StrictTxOriginCheck(funcSign, stmt) :-
+  Leslie_FunctionSelector(func, funcSign),
+  Leslie_Statement_Function(stmt, func),
+  (CALLER(_, source); ORIGIN(_, source)),
+  Leslie_CompareVars(source,const_addr,res),
+  Variable_Value(const_addr,_),
+  ControlsWith(stmt,_,cond),
+  DataFlows(res, cond).
+
 // mark the external call in the hook/fallback function
 .decl Leslie_ExternalCallInHook(callStmt:Statement, funcSign:symbol)
 .output Leslie_ExternalCallInHook

@@ -58,9 +58,9 @@ if __name__ == "__main__":
     rootLogger = logging.getLogger(None)
 
     if args.verbose:
-        rootLogger.setLevel(level=logging.DEBUG)
-    else:
         rootLogger.setLevel(level=logging.INFO)
+    else:
+        rootLogger.setLevel(level=logging.WARNING)
 
     contracts = {}
     # default: storage_addr is the same as logic_addr
@@ -159,8 +159,7 @@ if __name__ == "__main__":
                 "level": 0,
                 "env_val": None,
             }
-            # pop from left to right
-            source["func_sign"] = external_call_in_func_sigature.pop(0)
+            source["func_sign"] = external_call_in_func_sigature.pop()
             cross_contract_call_graph = CallGraph(source, contracts, source["platform"])
             cross_contract_call_graph.construct_cross_contract_call_graph()
             visited_contracts = (

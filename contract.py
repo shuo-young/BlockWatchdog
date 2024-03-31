@@ -49,7 +49,7 @@ class Contract:
         self.createbin = False
         self.storage_space = {}
         self.env_val = env_val
-        print("env_val: ", str(self.env_val))
+        logging.info("external call env_val: {}".format(self.env_val))
         self.analyze()
 
     def format_addr(self, addr):
@@ -80,8 +80,16 @@ class Contract:
 
             self.set_callArgVals()
             self.set_knownArgVals()
-            logging.info("call arg vals " + str(self.callArgVals))
-            logging.info("known arg vals " + str(self.knownArgVals))
+            logging.info(
+                "call arg vals obtained from the previous contract call {}".format(
+                    self.callArgVals
+                )
+            )
+            logging.info(
+                "known arg vals in the current contract call {}".format(
+                    self.knownArgVals
+                )
+            )
             if self.origin is True:
                 if not self.createbin:
                     # remove key 0x0 from the dict  func_sign_dict
@@ -483,7 +491,9 @@ class Contract:
                                     temp_index
                                 ]
                                 logging.info(
-                                    "known target vals: ", external_call["logic_addr"]
+                                    "known target vals: {}".format(
+                                        external_call["logic_addr"]
+                                    )
                                 )
 
             # record all args (const address, constants, and other env vars (e.g., msg.sender, address(this)))
