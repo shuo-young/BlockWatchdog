@@ -28,6 +28,8 @@
 2. Woofi: Price Manipulation
 
    [PoC](https://github.com/SunWeb3Sec/DeFiHackLabs/blob/main/src/test/Woofi_exp.sol)
+
+   Tx trace: https://arbiscan.io/tx/0x57e555328b7def90e1fc2a0f7aa6df8d601a8f15803800a5aaf0a20382f21fbd
    
    
 3. EDG Finance: Price Manipulation
@@ -46,3 +48,8 @@
 
    Tx trace: https://phalcon.blocksec.com/explorer/tx/arbitrum/0xf52a681bc76df1e3a61d9266e3a66c7388ef579d62373feb4fd0991d36006855
    
+5. BurnsDefi: Price Manipulation
+
+   [PoC](https://github.com/SunWeb3Sec/DeFiHackLabs/blob/main/src/test/BurnsDefi_exp.sol)
+
+   Tx trace: https://phalcon.blocksec.com/explorer/tx/bsc/0x1d0af3a963682748493f21bf9e955ce3a950bee5817401bf2486db7a0af104b4

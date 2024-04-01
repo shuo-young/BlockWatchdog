@@ -483,9 +483,9 @@ class Contract:
                 ]
                 if len(df_temp) > 0:
                     # find the function that use the itself's public func args
-                    for i in range(len(df_temp)):
-                        if list(df_temp["func"])[i] == list(df_temp["pubFun"])[i]:
-                            temp_index = int(list(df_temp["argIndex"])[i])
+                    for j in range(len(df_temp)):
+                        if list(df_temp["func"])[j] == list(df_temp["pubFun"])[j]:
+                            temp_index = int(list(df_temp["argIndex"])[j])
                             if temp_index in self.callArgVals.keys():
                                 external_call["logic_addr"] = self.callArgVals[
                                     temp_index
