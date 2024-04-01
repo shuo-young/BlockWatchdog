@@ -78,6 +78,42 @@ Leslie_FLSensitiveVar(funcSign, var) :-
   Leslie_Statement_Function(callStmt, func),
   (CALL(callStmt, _, calleeVar, _, _, _, _, _, _);STATICCALL(callStmt, _, calleeVar, _, _, _, _, _);DELEGATECALL(callStmt, _, calleeVar, _, _, _, _, _)).
 
+// Flashloan attack 3 patterns (from attacker contract perspective)
+// 1. double reentrancy through flashloan api
+// 2. flashloan to manipulate price and take profits by withdrawing profits based on balanceOf() of manipulated token
+// 3. in the flashloan callback function to prepare getAmounts() to take profit that is determined by the getAmountOut() API in .transfer() operation
+
+// Other helper
+// 1. token borrow and repay state monitor
+
+.decl Leslie_FLTaintedVarToSensitiveVar(funcSign:symbol, taintedVar:Variable, sensitiveVar: Variable)
+.output Leslie_FLTaintedVarToSensitiveVar
+Leslie_FLTaintedVarToSensitiveVar(funcSign, taintedVar, sensitiveVar):-
+  Leslie_FLTaintedVar(funcSign, taintedVar),
+  Leslie_FLSensitiveVar(funcSign, sensitiveVar),
+  DataFlows(taintedVar, sensitiveVar).
+
+// refer to defitainter
+.decl Leslie_FLTaintedCallArg(funcSign:symbol, callStmt:Statement, index: number)
+.output Leslie_FLTaintedCallArg
+Leslie_FLTaintedCallArg(funcSign, callStmt, index):-
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, index, callArg),
+  Leslie_FLTaintedVar(_, var),
+  Leslie_Statement_Function(callStmt, func),
+  DataFlows(var, callArg),
+  Leslie_FunctionSelector(func, funcSign),
+  (CALL(callStmt, _, _, _, _, _, _, _, _);STATICCALL(callStmt, _, _, _, _, _, _, _);DELEGATECALL(callStmt, _, _, _, _, _, _, _)).
+
+.decl Leslie_FLTaintedFuncRet(funcSign:symbol, callStmt:Statement, index: number)
+.output Leslie_FLTaintedFuncRet
+Leslie_FLTaintedFuncRet(funcSign, retStmt, retIndex):-
+  RETURN(retStmt, _, _),
+  Leslie_Statement_Function(retStmt, func),
+  StatementUsesMemory_ActualMemoryArg(retStmt, _, retIndex, ret),
+  Leslie_FLTaintedVar(_, var),
+  DataFlows(var, ret),
+  Leslie_FunctionSelector(func, funcSign).
+
 // random number calculation using env opcode, related to random number attack
 .decl EnvOp(stmt:Statement, to:Variable)
 EnvOp(stmt, to) :-
