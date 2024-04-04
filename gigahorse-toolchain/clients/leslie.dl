@@ -24,6 +24,19 @@ Leslie_FunctionSelector(func, funcSign) :-
   HighLevelFunctionName(func, funcSign),
   funcSign = "__function_selector__".
 
+// flashloan call in the attack contract
+.decl Leslie_FlashloanCall(funcSign: symbol, callStmt: Statement, argIndex:number, argVar:Variable)
+.output Leslie_FlashloanCall
+Leslie_FlashloanCall(funcSign, callStmt,argIndex,argVar) :-
+  Leslie_FunctionSelector(func, funcSign),
+  Leslie_ExternalCallInfo(func, callStmt, _, _, _, _),
+  StatementUsesMemory_ActualMemoryArg(callStmt,_, 0, callSig),
+  (callSig = "0x22c0d9f"; // swap
+  callSig = "0x490e6cbc"; // flash univ3
+  callSig = "0xd0a494e4"), // flashlLoan()
+  argIndex != 0,
+  StatementUsesMemory_ActualMemoryArg(callStmt,_, argIndex, argVar).
+
 // tainted vars initialed by attacker, not necessarily the public func arg
 .decl Leslie_TaintedVar(funcSign:symbol, var:Variable)
 // 1. vars that flows to the prepared call args in the attack contract
@@ -39,44 +52,37 @@ Leslie_TaintedVar(funcSign, var) :-
 .decl Leslie_FLTaintedVar(funcSign:symbol, var:Variable)
 .output Leslie_FLTaintedVar
 Leslie_FLTaintedVar(funcSign, var) :-
-  // StatementUsesMemory_ActualMemoryArg(callStmt, _, 1, amountOut),
-  StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, callFuncSigVar),
-  Variable_Value(callFuncSigVar,callFuncSig),
-  callFuncSig = "0x1f00ca74", // getAmoutIn()
-  Leslie_FunctionSelector(func, funcSign),
-  Leslie_Statement_Function(callStmt, func),
-  CallResult(var, callStmt),
-  (CALL(callStmt, _, calleeVar, _, _, _, _, _, _);STATICCALL(callStmt, _, calleeVar, _, _, _, _, _);DELEGATECALL(callStmt, _, calleeVar, _, _, _, _, _)).
+  CallToSignature(stmt, "getAmountsIn(uint256,address[])"), //"0x1f00ca74",
+  ExternalCall_ActualReturn(stmt, var, _),
+  Leslie_Statement_Function(stmt, func),
+  PublicFunctionSelector(func, funcSign).
 
 Leslie_FLTaintedVar(funcSign, var) :-
-  // StatementUsesMemory_ActualMemoryArg(callStmt, _, 1, amountIn),
-  StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, callFuncSigVar),
-  Variable_Value(callFuncSigVar,callFuncSig),
-  callFuncSig = "0xd06ca61f", // getAmoutOut()
-  CallResult(var, callStmt),
-  Leslie_FunctionSelector(func, funcSign),
-  Leslie_Statement_Function(callStmt, func),
-  (CALL(callStmt, _, calleeVar, _, _, _, _, _, _);STATICCALL(callStmt, _, calleeVar, _, _, _, _, _);DELEGATECALL(callStmt, _, calleeVar, _, _, _, _, _)).
+  CallToSignature(stmt, "getAmountsOut(uint256,address[])"), //"0xd06ca61f"
+  ExternalCall_ActualReturn(stmt, var, _),
+  Leslie_Statement_Function(stmt, func),
+  PublicFunctionSelector(func, funcSign).
 
 Leslie_FLTaintedVar(funcSign, var) :-
-  // StatementUsesMemory_ActualMemoryArg(callStmt, _, 1, amountIn),
-  StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, callFuncSigVar),
-  Variable_Value(callFuncSigVar,callFuncSig),
-  callFuncSig = "0x70a08231", // balanceOf()
-  CallResult(var, callStmt),
-  Leslie_FunctionSelector(func, funcSign),
-  Leslie_Statement_Function(callStmt, func),
-  (CALL(callStmt, _, calleeVar, _, _, _, _, _, _);STATICCALL(callStmt, _, calleeVar, _, _, _, _, _);DELEGATECALL(callStmt, _, calleeVar, _, _, _, _, _)).
+  CallToSignature(stmt, "balanceOf(address)"),
+  ExternalCall_ActualReturn(stmt, var, 0),
+  Leslie_Statement_Function(stmt, func),
+  PublicFunctionSelector(func, funcSign).
 
-.decl Leslie_FLSensitiveVar(funcSign:symbol, var:Variable)
-.output Leslie_FLSensitiveVar
-Leslie_FLSensitiveVar(funcSign, var) :-
-  StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, callFuncSigVar),
-  Variable_Value(callFuncSigVar, "0xa9059cbb"), // call transfer(tar,amount(index 2))
-  StatementUsesMemory_ActualMemoryArg(callStmt, _, 2, var),
-  Leslie_FunctionSelector(func, funcSign),
-  Leslie_Statement_Function(callStmt, func),
-  (CALL(callStmt, _, calleeVar, _, _, _, _, _, _);STATICCALL(callStmt, _, calleeVar, _, _, _, _, _);DELEGATECALL(callStmt, _, calleeVar, _, _, _, _, _)).
+// getreserves() in the victim's context tainted source
+Leslie_FLTaintedVar(funcSign, var) :-
+  CallToSignature(stmt, "getReserves()"),
+  ExternalCall_ActualReturn(stmt, var, _),
+  Leslie_Statement_Function(stmt, func),
+  PublicFunctionSelector(func, funcSign).
+
+// the key in the attacker identification is whether the call target is the attacker contract itself
+.decl Leslie_FLSensitiveCall(callStmt:Statement, var:Variable, target:Variable)
+.output Leslie_FLSensitiveCall
+Leslie_FLSensitiveCall(callStmt, recipient, amount) :-
+  CallToSignature(callStmt, "transfer(address,uint256)"),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 1, recipient),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 2, amount).
 
 // Flashloan attack 3 patterns (from attacker contract perspective)
 // 1. double reentrancy through flashloan api
@@ -85,19 +91,30 @@ Leslie_FLSensitiveVar(funcSign, var) :-
 
 // Other helper
 // 1. token borrow and repay state monitor
+.decl Leslie_FLSensitiveVar(funcSign:symbol, amount:Variable)
+Leslie_FLSensitiveVar(funcSign, amount) :- 
+  Leslie_FLSensitiveCall(stmt, recipient, amount),
+  (PublicFunctionArg(_, var, _);CALLER(_, var);ORIGIN(_, var)), // manipulated by the caller
+  DataFlows(var, recipient),
+  Leslie_Statement_Function(stmt, func),
+  PublicFunctionSelector(func, funcSign).
 
 .decl Leslie_FLTaintedVarToSensitiveVar(funcSign:symbol, taintedVar:Variable, sensitiveVar: Variable)
 .output Leslie_FLTaintedVarToSensitiveVar
-Leslie_FLTaintedVarToSensitiveVar(funcSign, taintedVar, sensitiveVar):-
-  Leslie_FLTaintedVar(funcSign, taintedVar),
-  Leslie_FLSensitiveVar(funcSign, sensitiveVar),
-  DataFlows(taintedVar, sensitiveVar).
+Leslie_FLTaintedVarToSensitiveVar(funcSign, var1, var2):-
+  Leslie_FLTaintedVar(funcSign, var1),
+  !SLOAD(_, _, var1),
+  Leslie_FLSensitiveVar(funcSign, var2),
+  DataFlows(var1, var2),
+  var1 != var2,
+  funcSign != "0x70a08231".
 
 // refer to defitainter
 .decl Leslie_FLTaintedCallArg(funcSign:symbol, callStmt:Statement, index: number)
 .output Leslie_FLTaintedCallArg
 Leslie_FLTaintedCallArg(funcSign, callStmt, index):-
   StatementUsesMemory_ActualMemoryArg(callStmt, _, index, callArg),
+  index !=0, 
   Leslie_FLTaintedVar(_, var),
   Leslie_Statement_Function(callStmt, func),
   DataFlows(var, callArg),
@@ -425,6 +442,31 @@ Leslie_CallRetToSensitiveVar(funcSign, callStmt, callRetVar, callRetIndex, sensi
   DataFlows(callRetVar, sensitiveVar),
   Leslie_Statement_Function(callStmt, func),
   Leslie_FunctionSelector(func, funcSign).
+
+.decl Leslie_FLCallRetToSensitiveCall(funcSign:symbol, callRetStmt:Statement ,callStmt:Statement, sensitiveVar:Variable)
+.output Leslie_FLCallRetToSensitiveCall
+Leslie_FLCallRetToSensitiveCall(funcSign, callRetStmt, callStmt, sensitiveVar) :-
+  Leslie_FLCallRetToSensitiveVar(funcSign, callRetStmt, _, _, sensitiveVar),
+  Leslie_FLSensitiveCall(callStmt, _, sensitiveVar),
+  Leslie_Statement_Function(callStmt, func),
+  PublicFunctionSelector(func, funcSign).
+
+.decl Leslie_FLCallRetToSensitiveVar(funcSign:symbol, callStmt:Statement, callRetVar:Variable, callRetIndex:number, sensitiveVar:Variable)
+.output Leslie_FLCallRetToSensitiveVar
+Leslie_FLCallRetToSensitiveVar(funcSign, callStmt, callRetVar, callRetIndex, sensitiveVar) :-
+  ExternalCall_ActualReturn(callStmt, callRetVar, callRetIndex),
+  Leslie_FLSensitiveVar(_, sensitiveVar),
+  DataFlows(callRetVar, sensitiveVar),
+  Leslie_Statement_Function(callStmt, func),
+  PublicFunctionSelector(func, funcSign).
+
+Leslie_FLCallRetToSensitiveVar(funcSign, callStmt, callRetVar, callRetIndex, sensitiveVar) :-
+  ExternalCall_ActualReturn(callStmt, callRetVar, callRetIndex),
+  JUMPI(_, _, sensitiveVar),
+  DataFlows(callRetVar, sensitiveVar),
+  Leslie_Statement_Function(callStmt, func),
+  PublicFunctionSelector(func, funcSign),
+  funcSign = "0xda3d454c". // borrowAllowed(address,address,uint256)
 
 // one more sink rule: sensitive call to the funcArg
 .decl Leslie_FuncArgToSensitiveVar(funcSign:symbol, callStmt:Statement, funcArg:Variable, funcArgIndex:number, sensitiveVar:Variable, callFuncSig:Value)

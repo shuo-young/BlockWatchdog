@@ -8,9 +8,21 @@ log = logging.getLogger(__name__)
 
 
 # find feasible path of flow from the tainted var to sensitive var
+# generalization
+# we induce two flows, the first one is the attacker trace, the external call target manipulated by the very beginning contract
+# the second is the vulnerable trace which signifies the unhealthy dependent relationship
+# the critical thing is these two trace converge at a very delicate program point, like transfer. For example, the floashloan attacker manipulated the transfer target while the transfer amount is be attacked too.
+
+# all these tracers are augmented by the env tracer, which recover the context informantion in the call chain.
+# also, there is a token tracer to record the token flow information during the call
+# so on
+
+
 class FlowAnalysis:
+
     def __init__(
         self,
+        original_contract,
         contracts,
         main_contract_sign_list,
         external_call_in_func_sigature,
@@ -22,11 +34,17 @@ class FlowAnalysis:
         self.external_call_in_func_sigature = external_call_in_func_sigature
         self.intra_callsigs = []
         self.sensitive_callsigs = []
-        self.attack_matrix = {"br": False, "dos": False, "reentrancy": False}
+        self.attack_matrix = {
+            "br": False,
+            "dos": False,
+            "reentrancy": False,
+            "price_manipulation": False,
+        }
         self.visited_contracts = visited_contracts
         self.visited_funcs = visited_funcs
         self.victim_callback_info = {}
         self.attack_reenter_info = {}
+        self.original_contract = original_contract
 
     # helper
     def find_executed_pp(self, caller, callsite, contract_addr, func_sign):
@@ -131,6 +149,32 @@ class FlowAnalysis:
                     external_call["funcSign"],
                 )
         return
+
+    def get_external_call_known_arg_info(self, call_site, external_calls):
+        for external_call in external_calls:
+            if external_call["call_site"] == call_site:
+                log.info(external_call["known_args"])
+                return {call_site: external_call["known_args"]}  # {index: value}
+        return
+
+    def intraprocedural_analysis(self):
+        for key in self.contracts.keys():
+            temp_address = key.split("_")[2]
+            temp_funcSign = key.split("_")[3]
+            loc = (
+                "./gigahorse-toolchain/.temp/"
+                + temp_address
+                + "/out/Leslie_FLTaintedVarToSensitiveVar.csv"
+            )
+
+            if os.path.exists(loc) and (os.path.getsize(loc) > 0):
+                df = pd.read_csv(loc, header=None, sep="	")
+                df.columns = ["funcSign", "taintedVar", "sensitiveVar"]
+                df = df.loc[df["funcSign"] == temp_funcSign]
+                if len(df) != 0:
+                    log.info(key)
+                    return True
+        return False
 
     # find other attack matrix
     def intraprocedural_br_analysis(self):
@@ -410,6 +454,94 @@ class FlowAnalysis:
                 )
         return call_args
 
+    def get_fl_tainted_call_args(self, contract_addr, func_sign):
+        call_args = []
+        loc = (
+            global_params.OUTPUT_PATH
+            + ".temp/"
+            + contract_addr
+            + "/out/Leslie_FLTaintedCallArg.csv"
+        )
+        if os.path.exists(loc) and (os.path.getsize(loc) > 0):
+            df = pd.read_csv(loc, header=None, sep="	")
+            df.columns = ["funcSign", "callStmt", "callArgIndex"]
+            df = df.loc[df["funcSign"] == func_sign]
+            for i in range(len(df)):
+                call_args.append(
+                    {
+                        "callStmt": df.iloc[i]["callStmt"],
+                        "callArgIndex": df.iloc[i]["callArgIndex"],
+                    }
+                )
+        return call_args
+
+    def get_fl_tainted_ret(self, contract_addr, func_sign):
+        rets = []
+        loc = (
+            global_params.OUTPUT_PATH
+            + ".temp/"
+            + contract_addr
+            + "/out/Leslie_FLTaintedFuncRet.csv"
+        )
+        if os.path.exists(loc) and (os.path.getsize(loc) > 0):
+            df = pd.read_csv(loc, header=None, sep="	")
+            df.columns = ["funcSign", "retIndex", "ret"]
+            df = df.loc[df["funcSign"] == func_sign]
+            for i in range(len(df)):
+                rets.append(df.iloc[i]["retIndex"])
+        return rets
+
+    # trace vulnerable flashloan-related flow
+    def get_pps_near_fl_source(self):
+        pps_near_source = []
+        for key in self.contracts.keys():
+            temp_caller = key.split("_")[0]
+            temp_callsite = key.split("_")[1]
+            temp_address = key.split("_")[2]
+            temp_funcSign = key.split("_")[3]
+
+            temp_indexes = self.get_fl_tainted_ret(temp_address, temp_funcSign)
+            if len(temp_indexes) > 0:
+                for temp_index in temp_indexes:
+                    pps_near_source.append(
+                        self.new_pp(
+                            temp_caller,
+                            temp_callsite,
+                            temp_address,
+                            temp_funcSign,
+                            temp_index,
+                            self.contracts[key].func_sign,
+                            "func_ret",
+                        )
+                    )
+                    # log.info("found tainted ret in contract: " + temp_address)
+
+            temp_call_args = self.get_fl_tainted_call_args(temp_address, temp_funcSign)
+            if len(temp_call_args) > 0:
+                for temp_call_arg in temp_call_args:
+                    (
+                        temp_external_call_caller,
+                        temp_external_call_logic_addr,
+                        temp_external_call_func_sign,
+                    ) = self.get_external_call_info(
+                        temp_call_arg["callStmt"], self.contracts[key].external_calls
+                    )
+                    pps_near_source.append(
+                        self.new_pp(
+                            temp_external_call_caller,
+                            temp_call_arg["callStmt"],
+                            temp_external_call_logic_addr,
+                            temp_external_call_func_sign,
+                            temp_call_arg["callArgIndex"],
+                            self.contracts[key].func_sign,
+                            "call_arg",
+                        )
+                    )
+                    # log.info("found tainted call arg in contract: " + temp_address)
+        log.info(pps_near_source)
+        return pps_near_source
+
+    # trace manipulated control flow
     def get_pps_near_source(self):
         pps_near_source = []
         for key in self.contracts.keys():
@@ -459,10 +591,37 @@ class FlowAnalysis:
                                 "call_arg",
                             )
                         )
-        # log.info(pps_near_source)
+
+        log.info(pps_near_source)
         return pps_near_source
 
-    # sink, not used yet
+    def fl_get_callsites_flow_to_sink(self, contract_addr, func_sign):
+        callsites = []
+        loc = (
+            global_params.OUTPUT_PATH
+            + ".temp/"
+            + contract_addr
+            + "/out/Leslie_FLCallRetToSensitiveVar.csv"
+        )
+        if os.path.exists(loc) and (os.path.getsize(loc) > 0):
+            df = pd.read_csv(loc, header=None, sep="	")
+            df.columns = [
+                "funcSign",
+                "callStmt",
+                "callRetVar",
+                "callRetIndex",
+                "sensitiveVar",
+            ]
+            df = df.loc[df["funcSign"] == func_sign]
+            for i in range(len(df)):
+                callsites.append(
+                    {
+                        "callStmt": df.iloc[i]["callStmt"],
+                        "callRetIndex": df.iloc[i]["callRetIndex"],
+                    }
+                )
+        return callsites
+
     def get_callsites_flow_to_sink(self, contract_addr, func_sign):
         callsites = []
         sensitive_callsigs = []
@@ -533,6 +692,60 @@ class FlowAnalysis:
                 )
 
         return func_args, sensitive_callsigs
+
+    # vulnerable sink
+    def get_pps_near_fl_sink(self):
+        pps_near_sink = []
+        known_args = {}
+        for key in self.contracts.keys():
+            temp_caller = key.split("_")[0]
+            temp_callsite = key.split("_")[1]
+            temp_address = key.split("_")[2]
+            temp_funcSign = key.split("_")[3]
+            # the function that sink site lies in
+            temp_caller_funcSign = key.split("_")[4]
+            # log.info(temp_caller_funcSign)
+            # get the taint sink: function arguments of the call arg to callee address
+            temp_call_args = self.fl_get_callsites_flow_to_sink(
+                temp_address, temp_funcSign
+            )
+            if len(temp_call_args) > 0:
+                for temp_call_arg in temp_call_args:
+                    (
+                        temp_external_call_caller,
+                        temp_external_call_logic_addr,
+                        temp_external_call_func_sign,
+                    ) = self.get_external_call_info(
+                        temp_call_arg["callStmt"], self.contracts[key].external_calls
+                    )
+                    pps_near_sink.append(
+                        self.new_pp(
+                            temp_external_call_caller,
+                            temp_call_arg["callStmt"],
+                            temp_external_call_logic_addr,
+                            temp_external_call_func_sign,
+                            temp_call_arg["callRetIndex"],
+                            # bug fixed
+                            self.contracts[key].func_sign,
+                            "func_ret",
+                        )
+                    )
+                    # add a sink as the transfer target
+                    # target = self.get_sensitive_call_from_call_ret(
+                    #     temp_call_arg["callStmt"], temp_external_call_caller
+                    # )
+                    # known_args[temp_call_arg["callStmt"]] = (
+                    #     self.get_external_call_known_arg_info(
+                    #         temp_call_arg["callStmt"],
+                    #         self.contracts[key].external_calls,
+                    #     )[temp_call_arg["callStmt"]]
+                    # )
+
+                # log.info("====sink====")
+                # notice: the 'caller_funcsign' is the function that call the victim to call the 'funcsign' in the attack contract
+        log.info(pps_near_sink)
+        # get the functions called by victim (possible)
+        return pps_near_sink
 
     def get_pps_near_sink(self):
         pps_near_sink = []
@@ -859,6 +1072,21 @@ class FlowAnalysis:
                     pending.append(pp)
         return False
 
+    def find_potential_price_manipulation_attack(self, source, sink):
+        reachable = False
+        is_pm_attack = False
+        for pp1 in source:
+            for pp2 in sink:
+                if self.is_same(pp1, pp2):
+                    reachable = True
+                    is_pm_attack = True
+                elif self.is_reachable(pp1, pp2):
+                    reachable = True
+                    is_pm_attack = True
+        if is_pm_attack:
+            log.info("price manipulation")
+        return reachable
+
     def detect(self):
         cross_contract = False
         for key in self.contracts.keys():
@@ -871,7 +1099,6 @@ class FlowAnalysis:
         result = False
 
         # br and dos detection
-        # now first focus on reentrancy
         if self.intraprocedural_br_analysis():
             self.attack_matrix["br"] = True
             # result = True
@@ -879,6 +1106,19 @@ class FlowAnalysis:
         if self.intraprocedural_dos_analysis():
             self.attack_matrix["dos"] = True
             # result = True
+
+        if self.intraprocedural_analysis():
+            log.info("intraprocedural analysis true of flashloan attack")
+            self.attack_matrix["price_manipulation"] = True
+        else:
+            # define the vulnerable trace
+            pps_near_fl_source = self.get_pps_near_fl_source()
+            pps_near_fl_sink = self.get_pps_near_fl_sink()
+            self.attack_matrix["price_manipulation"] = (
+                self.find_potential_price_manipulation_attack(
+                    pps_near_fl_source, pps_near_fl_sink
+                )
+            )
 
         # so how to define the tainted source
         # !the tainted source should only be from the analyzed contracts (i.e., input contract)
@@ -891,6 +1131,7 @@ class FlowAnalysis:
 
         reachable = False
         reachable_site = {}
+
         # for every source, find whether one sink can be reached
         for pp1 in pps_near_source:
             for pp2 in pps_near_sink:

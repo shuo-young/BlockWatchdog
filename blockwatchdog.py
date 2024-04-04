@@ -177,6 +177,7 @@ if __name__ == "__main__":
         m_call_depth = max_call_depth
 
     detector = FlowAnalysis(
+        source["logic_addr"],
         contracts,
         func_sign_list,
         store_external_call_in_func_sigature_list,

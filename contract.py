@@ -214,6 +214,22 @@ class Contract:
                 for index in self.env_val.keys():
                     self.callArgVals[index] = self.env_val[index]
 
+    def get_sensitive_transfer_target(self):
+        call = []
+        loc = (
+            global_params.OUTPUT_PATH
+            + ".temp/"
+            + self.logic_addr
+            + "/out/Leslie_FLCallRetToSensitiveCall.csv"
+        )
+        if os.path.exists(loc) and (os.path.getsize(loc) > 0):
+            df = pd.read_csv(loc, header=None, sep="	")
+            df.columns = ["funcSign", "callRetStmt", "callStmt", "sensitiveVar"]
+            df = df.loc[df["funcSign"] == self.func_sign]
+            for i in range(len(df)):
+                call.append(df.iloc[i]["callStmt"])
+        return call
+
     def set_knownArgVals(self):
         loc = (
             "./gigahorse-toolchain/.temp/"
@@ -397,6 +413,9 @@ class Contract:
         else:
             df_callee_funarg = pd.DataFrame()
 
+        transfer_target_call = self.get_sensitive_transfer_target()
+        log.info("transfer target call")
+        log.info(transfer_target_call)
         # for every call point in the contract, try to find its call target
         for i in range(len(df_external_call)):
             call_stmt = df_external_call.iloc[i]["callStmt"]
@@ -408,7 +427,12 @@ class Contract:
                 "caller": "",  # caller address (msg.sender for the origin) (current)
                 "call_site": "",  # external call site (current)
                 "known_args": {},  # record all known args from env and storage, etc.
+                "transfer_target": "",
             }
+            if call_stmt in transfer_target_call:
+                external_call["transfer_target"] = self.knownArgVals[call_stmt][0]
+                log.info("transfer target")
+                log.info(external_call["transfer_target"])
 
             if len(df_callee_const) != 0:
                 df_temp = df_callee_const.loc[df_callee_const["callStmt"] == call_stmt]
