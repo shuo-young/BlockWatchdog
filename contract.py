@@ -106,13 +106,17 @@ class Contract:
         if self.platform == "ETH":
             self.url = "https://eth-mainnet.g.alchemy.com/v2/6t0LpEw9cr0OlGIVTFqs92aOIkfhktMk"  # backup: https://eth-mainnet.g.alchemy.com/v2/6t0LpEw9cr0OlGIVTFqs92aOIkfhktMk
         elif self.platform == "BSC":
-            self.url = "https://go.getblock.io/3937fb5368654fe38d1736304fa584c3"
+            self.url = "https://little-aged-thunder.bsc.quiknode.pro/53b86587d990e1cb9354cd2a01ebb3b16109427f/"
         elif self.platform == "FTM":
             self.url = "https://practical-long-energy.fantom.discover.quiknode.pro/fc97af1ebab40f57ea698b6cf3dd67a2d24cac1a/"
+        elif self.platform == "ARB":
+            self.url = (
+                "https://arb-mainnet.g.alchemy.com/v2/uQXNRP9T7_rg0AB1VZbjClHMf0w7OiCA"
+            )
         else:
             self.url = ""
-        w3 = Web3(Web3.HTTPProvider(self.url))
-        self.block_number = w3.eth.get_block_number()
+        # w3 = Web3(Web3.HTTPProvider(self.url))
+        # self.block_number = w3.eth.get_block_number()
 
     def download_bytecode(self):
         if self.url == "":
@@ -287,7 +291,16 @@ class Contract:
         else:
             w3 = Web3(Web3.WebsocketProvider(self.url))
         contract_address = w3.to_checksum_address(self.storage_addr)
-        storage_content = str(w3.eth.get_storage_at(contract_address, slot_index).hex())
+        storage_content = str(
+            w3.eth.get_storage_at(
+                contract_address,
+                slot_index,
+                block_identifier=self.block_number,
+            ).hex()
+        )
+        # print(self.logic_addr)
+        # print(slot_index)
+        # print(storage_content)
         storage_content = storage_content.replace("0x", "")
         if byteLow == 0:
             contract_addr = "0x" + storage_content[-(byteHigh + 1) * 2 :]
@@ -377,6 +390,17 @@ class Contract:
         else:
             df_callee_storage_proxy = pd.DataFrame()
 
+        loc_callee_env = (
+            "./gigahorse-toolchain/.temp/"
+            + self.logic_addr
+            + "/out/Leslie_ExternalCall_Callee_EnvType.csv"
+        )
+        if os.path.exists(loc_callee_env) and (os.path.getsize(loc_callee_env) > 0):
+            df_callee_env = pd.read_csv(loc_callee_env, header=None, sep="	")
+            df_callee_env.columns = ["func", "callStmt", "opcode"]
+        else:
+            df_callee_env = pd.DataFrame()
+
         # for target function signature identification
         loc_fs_const = (
             "./gigahorse-toolchain/.temp/"
@@ -430,9 +454,10 @@ class Contract:
                 "transfer_target": "",
             }
             if call_stmt in transfer_target_call:
-                external_call["transfer_target"] = self.knownArgVals[call_stmt][0]
-                log.info("transfer target")
-                log.info(external_call["transfer_target"])
+                if call_stmt in self.knownArgVals.keys():
+                    external_call["transfer_target"] = self.knownArgVals[call_stmt][0]
+                    log.info("transfer target")
+                    log.info(external_call["transfer_target"])
 
             if len(df_callee_const) != 0:
                 df_temp = df_callee_const.loc[df_callee_const["callStmt"] == call_stmt]
@@ -446,59 +471,30 @@ class Contract:
                     df_callee_storage["callStmt"] == call_stmt
                 ]
                 if len(df_temp) > 0:
-                    if self.storage_addr in global_params.STORAGE_SPACE.keys():
-                        if (
-                            list(df_temp["storageSlot"])[0]
-                            in global_params.STORAGE_SPACE[self.storage_addr].keys()
-                        ):
-                            external_call["logic_addr"] = global_params.STORAGE_SPACE[
-                                self.storage_addr
-                            ][list(df_temp["storageSlot"])[0]]
-                        else:
-                            external_call["logic_addr"] = self.get_storage_content(
-                                list(df_temp["storageSlot"])[0],
-                                list(df_temp["byteLow"])[0],
-                                list(df_temp["byteHigh"])[0],
-                            )
-                            global_params.STORAGE_SPACE[self.storage_addr][
-                                list(df_temp["storageSlot"])[0]
-                            ] = external_call["logic_addr"]
-                    else:
-                        global_params.STORAGE_SPACE[self.storage_addr] = {}
-                        external_call["logic_addr"] = self.get_storage_content(
-                            list(df_temp["storageSlot"])[0],
-                            list(df_temp["byteLow"])[0],
-                            list(df_temp["byteHigh"])[0],
-                        )
-                        global_params.STORAGE_SPACE[self.storage_addr][
-                            list(df_temp["storageSlot"])[0]
-                        ] = external_call["logic_addr"]
+                    external_call["logic_addr"] = self.get_storage_content(
+                        list(df_temp["storageSlot"])[0],
+                        int(list(df_temp["byteLow"])[0]),
+                        int(list(df_temp["byteHigh"])[0]),
+                    )
 
             if len(df_callee_storage_proxy) != 0:
                 df_temp = df_callee_storage_proxy.loc[
                     df_callee_storage_proxy["callStmt"] == call_stmt
                 ]
                 if len(df_temp) > 0:
-                    if self.storage_addr in global_params.STORAGE_SPACE.keys():
-                        if (
-                            list(df_temp["storageSlot"])[0]
-                            in global_params.STORAGE_SPACE[self.storage_addr].keys()
-                        ):
-                            external_call["logic_addr"] = global_params.STORAGE_SPACE[
-                                self.storage_addr
-                            ][list(df_temp["storageSlot"])[0]]
-                        else:
-                            external_call["logic_addr"] = self.get_storage_content(
-                                list(df_temp["storageSlot"])[0], 0, 19
-                            )
-                            global_params.STORAGE_SPACE[self.storage_addr][
-                                list(df_temp["storageSlot"])[0]
-                            ] = external_call["logic_addr"]
-                    else:
-                        global_params.STORAGE_SPACE[self.storage_addr] = {}
-                        external_call["logic_addr"] = self.get_storage_content(
-                            list(df_temp["storageSlot"])[0], 0, 19
-                        )
+                    external_call["logic_addr"] = self.get_storage_content(
+                        list(df_temp["storageSlot"])[0], 0, 19
+                    )
+            if len(df_callee_env) != 0:
+                df_temp = df_callee_env.loc[df_callee_env["callStmt"] == call_stmt]
+                if len(df_temp) > 0:
+                    env_op = list(df_temp["opcode"])[0]
+                    if env_op == "CALLER":
+                        external_call["logic_addr"] = self.caller
+                    elif env_op == "ADDRESS":
+                        external_call["logic_addr"] = self.logic_addr
+                    elif env_op == "ORIGIN":
+                        external_call["logic_addr"] = "MSG.SENDER"
 
             # find callee got from the func arg (called by caller), and try to recover the know args
             if len(df_callee_funarg) != 0:
@@ -545,4 +541,5 @@ class Contract:
                 df_temp = df_fs_proxy.loc[df_fs_proxy["callStmt"] == call_stmt]
                 if len(df_temp) > 0:
                     external_call["funcSign"] = func_sign
+            # print(external_call)
             self.external_calls.append(external_call)

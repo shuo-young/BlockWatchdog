@@ -5,8 +5,9 @@ import time
 
 import global_params
 from contract import Contract
-from flow_analysis import FlowAnalysis
+from flow.data_flow import FlowAnalysis
 from graph.call_graph import CallGraph
+from identifier import AttackIdentifier
 
 if __name__ == "__main__":
     # Main Body
@@ -144,6 +145,7 @@ if __name__ == "__main__":
         if "__function_selector__" in external_call_in_func_sigature:
             external_call_in_func_sigature.remove("__function_selector__")
 
+        # external_call_in_func_sigature = ["0xa1d48336"]
         max_call_depth = 0
         # for every functions that contains external calls
         while len(external_call_in_func_sigature) > 0:
@@ -176,7 +178,7 @@ if __name__ == "__main__":
 
         m_call_depth = max_call_depth
 
-    detector = FlowAnalysis(
+    detector = AttackIdentifier(
         source["logic_addr"],
         contracts,
         func_sign_list,
@@ -203,18 +205,6 @@ if __name__ == "__main__":
         "external_call": {
             "externalcall_inhook": False,
             "externalcall_infallback": False,
-            "hooks_focused": [
-                "tokensReceived",
-                "transferFrom",
-                "tokensToSend",
-                "onERC721Received",
-                "onERC1155Received",
-                "canImplementInterfaceForAddress",
-                "delegatedTransferERC20",
-                "onTokenTransfer",
-                "onFlashLoan",
-                "uniswapV2Call",
-            ],
         },
         "call_paths": [],
         "visited_contracts": [],
@@ -241,17 +231,23 @@ if __name__ == "__main__":
 
     result["semantic_features"]["op_creation"][
         "op_multicreate"
-    ] = detector.op_multicreate_analysis()
+    ] = detector.semantic_analysis.op_multicreate_analysis()
     result["semantic_features"]["op_creation"][
         "op_solecreate"
-    ] = detector.op_solecreate_analysis()
-    result["semantic_features"]["op_selfdestruct"] = detector.op_selfdestruct_analysis()
-    result["semantic_features"]["op_env"] = detector.tainted_env_call_arg()
+    ] = detector.semantic_analysis.op_solecreate_analysis()
+    result["semantic_features"][
+        "op_selfdestruct"
+    ] = detector.semantic_analysis.op_selfdestruct_analysis()
+    result["semantic_features"][
+        "op_env"
+    ] = detector.flow_analysis.tainted_env_call_arg()
 
-    result["external_call"]["externalcall_inhook"] = detector.externalcall_inhook()
+    result["external_call"][
+        "externalcall_inhook"
+    ] = detector.semantic_analysis.externalcall_inhook()
     result["external_call"][
         "externalcall_infallback"
-    ] = detector.externalcall_infallback()
+    ] = detector.semantic_analysis.externalcall_infallback()
 
     sensitive_callsigs = detector.get_sig_info()
     victim_callback_info, attack_reenter_info = detector.get_reen_info()
