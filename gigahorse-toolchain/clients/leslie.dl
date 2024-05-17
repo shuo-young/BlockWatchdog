@@ -90,6 +90,14 @@ Leslie_FLTaintedVar(funcSign, var) :-
   Leslie_Statement_Function(stmt, func),
   PublicFunctionSelector(func, funcSign).
 
+// first use known args to recover the transfer target
+.decl Leslie_FLSensitiveCallWithRecipientIndex(callStmt:Statement, recipient:Variable, recipientIndex:number, amount:Variable)
+.output Leslie_FLSensitiveCallWithRecipientIndex
+Leslie_FLSensitiveCallWithRecipientIndex(callStmt, recipient, 0, recipient) :-
+  CallToSignature(callStmt, "transfer(address,uint256)"),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 1, recipient),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 2, amount).
+
 // the key in the attacker identification is whether the call target is the attacker contract itself
 .decl Leslie_FLSensitiveCall(callStmt:Statement, var:Variable, target:Variable)
 .output Leslie_FLSensitiveCall
@@ -126,6 +134,14 @@ Leslie_FLSensitiveCall(callStmt, recipient, amount) :-
 Leslie_FLSensitiveLog(logStmt, index, sigHashVar) :-
   Variable_Value(sigHashVar, "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
   StatementUsesMemory_ActualArg(logStmt, sigHashVar, index).
+
+.decl Leslie_FLTransferInLog(logStmt:Statement, recipient:Variable, amount:Variable)
+.output Leslie_FLTransferInLog
+Leslie_FLTransferInLog(logStmt, recipient, amount) :-
+  Variable_Value(sigHashVar, "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
+  StatementUsesMemory_ActualArg(logStmt, sigHashVar, 0),
+  StatementUsesMemory_ActualArg(logStmt, amount, 3),
+  StatementUsesMemory_ActualArg(logStmt, recipient, 2).
 
 Leslie_FLSensitiveCall(logStmt, recipient, amount) :-
   Variable_Value(sigHashVar, "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
@@ -448,6 +464,15 @@ Leslie_Op_CreateInLoop(funcSign, stmt) :-
     // stmt is in the loop (while, for loop)
     StatementInStructuredLoop(stmt, _),
     (Statement_Opcode(stmt, "CREATE");Statement_Opcode(stmt, "CREATE2")).
+  
+.decl Leslie_Op_ExternalCallInLoop(funcSign:symbol, stmt: Statement, tarFuncSign:symbol)
+.output Leslie_Op_ExternalCallInLoop
+Leslie_Op_ExternalCallInLoop(funcSign, callStmt, tarFuncSign) :-
+    Leslie_Statement_Function(callStmt, func),
+    Leslie_FunctionSelector(func, funcSign),
+    // stmt is in the loop (while, for loop)
+    StatementInStructuredLoop(callStmt, _),
+    Leslie_ExternalCall_FuncSign_ConstType(func, callStmt, tarFuncSign).
 
 .decl Leslie_Op_SoleCreate(funcSign:symbol, stmt: Statement)
 .output Leslie_Op_SoleCreate

@@ -218,20 +218,34 @@ class Contract:
                 for index in self.env_val.keys():
                     self.callArgVals[index] = self.env_val[index]
 
-    def get_sensitive_transfer_target(self):
-        call = []
+    def get_fl_transfer(self):
         loc = (
             global_params.OUTPUT_PATH
             + ".temp/"
             + self.logic_addr
-            + "/out/Leslie_FLCallRetToSensitiveCall.csv"
+            + "/out/Leslie_FLTransferInLog.csv"
         )
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
             df = pd.read_csv(loc, header=None, sep="	")
-            df.columns = ["funcSign", "callRetStmt", "callStmt", "sensitiveVar"]
+            df.columns = ["logStmt", "recipient", "amount"]
             df = df.loc[df["funcSign"] == self.func_sign]
+            return list(df["transferVar"])
+        return []
+
+    def get_sensitive_transfer_target(self):
+        call = {}
+        loc = (
+            global_params.OUTPUT_PATH
+            + ".temp/"
+            + self.logic_addr
+            + "/out/Leslie_FLSensitiveCallWithRecipientIndex.csv"
+        )
+        if os.path.exists(loc) and (os.path.getsize(loc) > 0):
+            df = pd.read_csv(loc, header=None, sep="	")
+            df.columns = ["callStmt", "recipient", "recipientIndex", "amount"]
+            # df = df.loc[df["funcSign"] == self.func_sign]
             for i in range(len(df)):
-                call.append(df.iloc[i]["callStmt"])
+                call[df.iloc[i]["callStmt"]] = int(df.iloc[i]["recipientIndex"])
         return call
 
     def set_knownArgVals(self):
@@ -273,7 +287,7 @@ class Contract:
                 elif env_op == "ADDRESS":
                     temp_callArgVal = self.logic_addr
                 elif env_op == "ORIGIN":
-                    temp_callArgVal = "MSG.SENDER"
+                    temp_callArgVal = "MSG.SENDER"  # EOA address
                 if df.iloc[i]["callStmt"] in self.knownArgVals.keys():
                     self.knownArgVals[df.iloc[i]["callStmt"]][
                         temp_index
@@ -283,6 +297,8 @@ class Contract:
                     self.knownArgVals[df.iloc[i]["callStmt"]][
                         temp_index
                     ] = temp_callArgVal
+        print("====known arg vals====")
+        print(self.knownArgVals)
 
     # in some cases, the storage address is not the same as the logic address
     def get_storage_content(self, slot_index, byteLow, byteHigh):
@@ -440,6 +456,7 @@ class Contract:
         transfer_target_call = self.get_sensitive_transfer_target()
         log.info("transfer target call")
         log.info(transfer_target_call)
+
         # for every call point in the contract, try to find its call target
         for i in range(len(df_external_call)):
             call_stmt = df_external_call.iloc[i]["callStmt"]
@@ -453,11 +470,23 @@ class Contract:
                 "known_args": {},  # record all known args from env and storage, etc.
                 "transfer_target": "",
             }
-            if call_stmt in transfer_target_call:
+            if call_stmt in transfer_target_call.keys():
                 if call_stmt in self.knownArgVals.keys():
-                    external_call["transfer_target"] = self.knownArgVals[call_stmt][0]
-                    log.info("transfer target")
-                    log.info(external_call["transfer_target"])
+                    print("====has known args in the call stmt ", call_stmt, "====")
+                    print(self.knownArgVals[call_stmt])
+                    print("====transfer target call====")
+                    print(transfer_target_call)
+                    if (
+                        transfer_target_call[call_stmt]
+                        in self.knownArgVals[call_stmt].keys()
+                    ):
+                        external_call["transfer_target"] = self.knownArgVals[call_stmt][
+                            transfer_target_call[call_stmt]
+                        ]
+                        log.info("====transfer target====")
+                        log.info(external_call["transfer_target"])
+                        print("====transfer target====")
+                        print(external_call["transfer_target"])
 
             if len(df_callee_const) != 0:
                 df_temp = df_callee_const.loc[df_callee_const["callStmt"] == call_stmt]
@@ -543,3 +572,6 @@ class Contract:
                     external_call["funcSign"] = func_sign
             # print(external_call)
             self.external_calls.append(external_call)
+            if external_call["funcSign"] == "0xa9059cbb":
+                print("transfer call identified")
+                print(external_call)

@@ -22,29 +22,11 @@ class FlowAnalysis:
 
     def __init__(
         self,
-        # original_contract,
+        input_contract,
         contracts,
-        # main_contract_sign_list,
-        # external_call_in_func_sigature,
-        # visited_contracts,
-        # visited_funcs,
     ):
         self.contracts = contracts
-        # self.main_contract_sign_list = main_contract_sign_list
-        # self.external_call_in_func_sigature = external_call_in_func_sigature
-        # self.intra_callsigs = []
-        # self.sensitive_callsigs = []
-        # self.attack_matrix = {
-        #     "br": False,
-        #     "dos": False,
-        #     "reentrancy": False,
-        #     "price_manipulation": False,
-        # }
-        # self.visited_contracts = visited_contracts
-        # self.visited_funcs = visited_funcs
-        # self.victim_callback_info = {}
-        # self.attack_reenter_info = {}
-        # self.original_contract = original_contract
+        self.input_contract = input_contract
 
     # helper
     def find_executed_pp(self, caller, callsite, contract_addr, func_sign):
@@ -158,6 +140,7 @@ class FlowAnalysis:
         return
 
     def intraprocedural_fla_analysis(self):
+        res = []
         for key in self.contracts.keys():
             temp_address = key.split("_")[2]
             temp_funcSign = key.split("_")[3]
@@ -174,31 +157,14 @@ class FlowAnalysis:
                 if len(df) != 0:
                     log.info(key)
                     print(key)
-                    return True
+                    print(temp_address)
+                    # not the input contract which is under test
+                    if temp_address != self.input_contract:
+                        res.append(key)
+                    # return True
+        if len(res) > 0:
+            return True
         return False
-
-        # find other attack matrix
-        # def intraprocedural_br_analysis(self):
-        #     for key in self.contracts.keys():
-        #         if self.contracts[key].level == 0:
-        #             temp_address = key.split("_")[2]
-        #             temp_funcSign = key.split("_")[3]
-        #             if "__function_selector__" in key:
-        #                 temp_funcSign = "__function_selector__"
-        #             loc = (
-        #                 global_params.OUTPUT_PATH
-        #                 + ".temp/"
-        #                 + temp_address
-        #                 + "/out/Leslie_SensitiveOpOfBadRandomnessAfterExternalCall.csv"
-        #             )
-        #             if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-        #                 df = pd.read_csv(loc, header=None, sep="	")
-        #                 df.columns = ["funcSign", "callStmt", "sensitiveVar", "sourceOp"]
-        #                 # it is not neccessary to label the func, just focus on the callStmt
-        #                 df = df.loc[df["funcSign"] == temp_funcSign]
-        #                 if len(df) != 0:
-        #                     return True
-        #     return False
 
     def tainted_env_call_arg(self):
         for key in self.contracts.keys():
@@ -214,201 +180,6 @@ class FlowAnalysis:
                 if os.path.exists(loc) and (os.path.getsize(loc) > 0):
                     df = pd.read_csv(loc, header=None, sep="	")
                     df.columns = ["funcSign", "envVar", "taintedVar"]
-                    # it is not neccessary to label the func, just focus on the callStmt
-                    df = df.loc[df["funcSign"] == temp_funcSign]
-                    if len(df) != 0:
-                        return True
-        return False
-
-        # def op_multicreate_analysis(self):
-        #     for key in self.contracts.keys():
-        #         if self.contracts[key].level == 0:
-        #             temp_address = key.split("_")[2]
-        #             temp_funcSign = key.split("_")[3]
-        #             if "__function_selector__" in key:
-        #                 temp_funcSign = "__function_selector__"
-        #             loc = (
-        #                 global_params.OUTPUT_PATH
-        #                 + ".temp/"
-        #                 + temp_address
-        #                 + "/out/Leslie_Op_CreateInLoop.csv"
-        #             )
-        #             if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-        #                 df = pd.read_csv(loc, header=None, sep="	")
-        #                 df.columns = ["funcSign", "stmt"]
-        #                 # it is not neccessary to label the func, just focus on the callStmt
-        #                 df = df.loc[df["funcSign"] == temp_funcSign]
-        #                 if len(df) != 0:
-        #                     return True
-        #     return False
-
-        # def op_solecreate_analysis(self):
-        #     for key in self.contracts.keys():
-        #         if self.contracts[key].level == 0:
-        #             temp_address = key.split("_")[2]
-        #             temp_funcSign = key.split("_")[3]
-        #             if "__function_selector__" in key:
-        #                 temp_funcSign = "__function_selector__"
-        #             loc = (
-        #                 global_params.OUTPUT_PATH
-        #                 + ".temp/"
-        #                 + temp_address
-        #                 + "/out/Leslie_Op_SoleCreate.csv"
-        #             )
-        #             if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-        #                 df = pd.read_csv(loc, header=None, sep="	")
-        #                 df.columns = ["funcSign", "stmt"]
-        #                 # it is not neccessary to label the func, just focus on the callStmt
-        #                 df = df.loc[df["funcSign"] == temp_funcSign]
-        #                 if len(df) != 0:
-        #                     return True
-        #     return False
-
-        # def op_selfdestruct_analysis(self):
-        #     for key in self.contracts.keys():
-        #         if self.contracts[key].level == 0:
-        #             temp_address = key.split("_")[2]
-        #             temp_funcSign = key.split("_")[3]
-        #             if "__function_selector__" in key:
-        #                 temp_funcSign = "__function_selector__"
-        #             loc = (
-        #                 global_params.OUTPUT_PATH
-        #                 + ".temp/"
-        #                 + temp_address
-        #                 + "/out/Leslie_Op_Selfdestruct.csv"
-        #             )
-        #             if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-        #                 df = pd.read_csv(loc, header=None, sep="	")
-        #                 df.columns = ["funcSign", "target"]
-        #                 # it is not neccessary to label the func, just focus on the callStmt
-        #                 df = df.loc[df["funcSign"] == temp_funcSign]
-        #                 if len(df) != 0:
-        #                     return True
-        #     return False
-
-        # # possible features of attacker contracts
-        # def externalcall_inhook(self):
-        #     for key in self.contracts.keys():
-        #         if self.contracts[key].level == 0:
-        #             temp_address = key.split("_")[2]
-        #             temp_funcSign = key.split("_")[3]
-        #             loc = (
-        #                 global_params.OUTPUT_PATH
-        #                 + ".temp/"
-        #                 + temp_address
-        #                 + "/out/Leslie_ExternalCallInHook.csv"
-        #             )
-        #             if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-        #                 df = pd.read_csv(loc, header=None, sep="	")
-        #                 df.columns = ["callStmt", "funcSign"]
-        #                 # it is not neccessary to label the func, just focus on the callStmt
-        #                 df = df.loc[df["funcSign"] == temp_funcSign]
-        #                 if len(df) != 0:
-        #                     return True
-        #     return False
-
-        # def externalcall_infallback(self):
-        #     for key in self.contracts.keys():
-        #         if self.contracts[key].level == 0:
-        #             temp_address = key.split("_")[2]
-        #             temp_funcSign = key.split("_")[3]
-        #             loc = (
-        #                 global_params.OUTPUT_PATH
-        #                 + ".temp/"
-        #                 + temp_address
-        #                 + "/out/Leslie_ExternalCallInFallback.csv"
-        #             )
-        #             if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-        #                 df = pd.read_csv(loc, header=None, sep="	")
-        #                 df.columns = ["callStmt", "funcSign"]
-        #                 # it is not neccessary to label the func, just focus on the callStmt
-        #                 df = df.loc[df["funcSign"] == temp_funcSign]
-        #                 if len(df) != 0:
-        #                     return True
-        #     return False
-
-        # def double_call_to_same_contract(self):
-        #     for key in self.contracts.keys():
-        #         if self.contracts[key].level == 0:
-        #             temp_address = key.split("_")[2]
-        #             temp_funcSign = key.split("_")[3]
-        #             loc = (
-        #                 global_params.OUTPUT_PATH
-        #                 + ".temp/"
-        #                 + temp_address
-        #                 + "/out/Leslie_DoubleCallToSameContract.csv"
-        #             )
-        #             if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-        #                 df = pd.read_csv(loc, header=None, sep="	")
-        #                 df.columns = ["funcSign", "callee"]
-        #                 # it is not neccessary to label the func, just focus on the callStmt
-        #                 df = df.loc[df["funcSign"] == temp_funcSign]
-        #                 if len(df) != 0:
-        #                     return True
-        #     return False
-
-        # def double_call_to_same_contract_by_storage(self):
-        #     for key in self.contracts.keys():
-        #         if self.contracts[key].level == 0:
-        #             temp_address = key.split("_")[2]
-        #             temp_funcSign = key.split("_")[3]
-        #             loc = (
-        #                 global_params.OUTPUT_PATH
-        #                 + ".temp/"
-        #                 + temp_address
-        #                 + "/out/Leslie_DoubleCallToSameContractByStorage.csv"
-        #             )
-        #             if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-        #                 df = pd.read_csv(loc, header=None, sep="	")
-        #                 df.columns = ["funcSign", "slot", "low", "high"]
-        #                 # it is not neccessary to label the func, just focus on the callStmt
-        #                 df = df.loc[df["funcSign"] == temp_funcSign]
-        #                 if len(df) != 0:
-        #                     return True
-        #     return False
-
-        # def preset_call_in_standard_erc20_transfer(self):
-        #     for key in self.contracts.keys():
-        #         if self.contracts[key].level == 0:
-        #             temp_address = key.split("_")[2]
-        #             temp_funcSign = key.split("_")[3]
-        #             loc = (
-        #                 global_params.OUTPUT_PATH
-        #                 + ".temp/"
-        #                 + temp_address
-        #                 + "/out/Leslie_CallInStandardTransfer.csv"
-        #             )
-        #             if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-        #                 df = pd.read_csv(loc, header=None, sep="	")
-        #                 df.columns = ["funcSign", "callStmt", "storageSlot"]
-        #                 # it is not neccessary to label the func, just focus on the callStmt
-        #                 df = df.loc[df["funcSign"] == temp_funcSign]
-        #                 if len(df) != 0:
-        #                     return True
-        #     return False
-
-        # def intraprocedural_dos_analysis(self):
-        for key in self.contracts.keys():
-            if self.contracts[key].level == 0:
-                temp_address = key.split("_")[2]
-                temp_funcSign = key.split("_")[3]
-                if "__function_selector__" in key:
-                    temp_funcSign = "__function_selector__"
-                loc = (
-                    global_params.OUTPUT_PATH
-                    + ".temp/"
-                    + temp_address
-                    + "/out/Leslie_SensitiveOpOfDoSAfterExternalCall.csv"
-                )
-                if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-                    df = pd.read_csv(loc, header=None, sep="	")
-                    df.columns = [
-                        "funcSign",
-                        "callStmt",
-                        "callRetVar",
-                        "callRetIndex",
-                        "sensitiveVar",
-                    ]
                     # it is not neccessary to label the func, just focus on the callStmt
                     df = df.loc[df["funcSign"] == temp_funcSign]
                     if len(df) != 0:
@@ -1092,131 +863,3 @@ class FlowAnalysis:
         if is_pm_attack:
             log.info("price manipulation")
         return reachable
-
-    # def detect(self):
-    #     cross_contract = False
-    #     for key in self.contracts.keys():
-    #         if self.contracts[key].level != 0:
-    #             cross_contract = True
-
-    #     if not cross_contract:
-    #         return False, self.attack_matrix
-
-    #     result = False
-
-    #     # br and dos detection
-    #     if self.intraprocedural_br_analysis():
-    #         self.attack_matrix["br"] = True
-    #         # result = True
-
-    #     if self.intraprocedural_dos_analysis():
-    #         self.attack_matrix["dos"] = True
-    #         # result = True
-    #     try:
-    #         if self.intraprocedural_fla_analysis():
-    #             log.info("intraprocedural analysis true of flashloan attack")
-    #             self.attack_matrix["price_manipulation"] = True
-    #         else:
-    #             # define the vulnerable trace
-    #             pps_near_fl_source = self.get_pps_near_fl_source()
-    #             pps_near_fl_sink = self.get_pps_near_fl_sink()
-    #             self.attack_matrix["price_manipulation"] = (
-    #                 self.find_potential_price_manipulation_attack(
-    #                     pps_near_fl_source, pps_near_fl_sink
-    #                 )
-    #             )
-    #     except Exception as e:
-    #         print(e)
-    #     print("analysis")
-
-    #     # so how to define the tainted source
-    #     # !the tainted source should only be from the analyzed contracts (i.e., input contract)
-    #     pps_near_source = self.get_pps_near_source()
-    #     # and how to define the sentive sink
-    #     pps_near_sink, sensitive_callsigs = self.get_pps_near_sink()
-
-    #     # set call sigs in the sink site
-    #     self.sensitive_callsigs = sensitive_callsigs
-
-    #     reachable = False
-    #     reachable_site = {}
-
-    #     # for every source, find whether one sink can be reached
-    #     for pp1 in pps_near_source:
-    #         for pp2 in pps_near_sink:
-    #             if self.is_same(pp1, pp2):
-    #                 reachable = True
-    #                 caller = pp2["caller"]
-    #                 caller_funcSign = pp2["caller_funcSign"]
-    #                 reachable_site[pp2["func_sign"]] = {
-    #                     "caller": caller,
-    #                     "caller_callback_funcSign": caller_funcSign,
-    #                 }
-    #             elif self.is_reachable(pp1, pp2):
-    #                 reachable = True
-    #                 caller = pp2["caller"]
-    #                 caller_funcSign = pp2["caller_funcSign"]
-    #                 reachable_site[pp2["func_sign"]] = {
-    #                     "caller": caller,
-    #                     "caller_callback_funcSign": caller_funcSign,
-    #                 }
-
-    #     victim_callback_info = {}
-    #     attack_reenter_info = {}
-
-    #     if reachable:
-    #         # judge whether the attacker contract implements the sensitive functions (called by victims)
-    #         overlap = list(
-    #             set(sensitive_callsigs).intersection(
-    #                 set(self.external_call_in_func_sigature)
-    #             )
-    #         )
-    #         if len(overlap) > 0:
-    #             for i in overlap:
-    #                 victim_callback_info[i] = []
-    #                 attack_reenter_info[i] = []
-
-    #                 if i in reachable_site:
-    #                     if reachable_site[i] not in victim_callback_info[i]:
-    #                         victim_callback_info[i].append(reachable_site[i])
-    #                 for key in self.contracts.keys():
-    #                     if (
-    #                         str(self.contracts[key].func_sign) == str(i)
-    #                         and self.contracts[key].level == 0
-    #                     ):
-    #                         externall_calls = self.contracts[key].external_calls
-    #                         for ec in externall_calls:
-    #                             temp_target_address = ec["logic_addr"]
-    #                             temp_funcSign = ec["funcSign"]
-
-    #                             res = {
-    #                                 "reenter_target": temp_target_address,
-    #                                 "reenter_funcSign": temp_funcSign,
-    #                             }
-    #                             if (
-    #                                 res not in attack_reenter_info[i]
-    #                                 and temp_target_address in self.visited_contracts
-    #                                 and temp_funcSign in self.visited_funcs
-    #                             ):
-    #                                 attack_reenter_info[i].append(res)
-    #                         result = True
-    #                         self.attack_matrix["reentrancy"] = True
-    #     if (
-    #         self.double_call_to_same_contract()
-    #         or self.double_call_to_same_contract_by_storage()
-    #         or self.preset_call_in_standard_erc20_transfer()
-    #     ):
-    #         self.attack_matrix["reentrancy"] = True
-    #         result = True
-    #     self.victim_callback_info = victim_callback_info
-    #     self.attack_reenter_info = attack_reenter_info
-    #     return result, self.attack_matrix
-
-    # def get_reen_info(self):
-    #     return self.victim_callback_info, self.attack_reenter_info
-
-    # def get_sig_info(self):
-    #     return self.sensitive_callsigs
-
-    # def get_attack_matric(self):
-    #     return self.attack_matrix

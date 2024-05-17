@@ -5,7 +5,6 @@ import time
 
 import global_params
 from contract import Contract
-from flow.data_flow import FlowAnalysis
 from graph.call_graph import CallGraph
 from identifier import AttackIdentifier
 
@@ -145,7 +144,7 @@ if __name__ == "__main__":
         if "__function_selector__" in external_call_in_func_sigature:
             external_call_in_func_sigature.remove("__function_selector__")
 
-        # external_call_in_func_sigature = ["0xa1d48336"]
+        external_call_in_func_sigature = ["0x4641257d"]
         max_call_depth = 0
         # for every functions that contains external calls
         while len(external_call_in_func_sigature) > 0:

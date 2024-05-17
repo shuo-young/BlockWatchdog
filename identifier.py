@@ -1,14 +1,15 @@
 import logging
 from semantic import semantic_feature
-from flow import data_flow
+from flow import data_flow, token_flow
 
 log = logging.getLogger(__name__)
 
 
 class AttackIdentifier:
+
     def __init__(
         self,
-        original_contract,
+        input_contract,
         contracts,
         main_contract_sign_list,
         external_call_in_func_sigature,
@@ -30,8 +31,13 @@ class AttackIdentifier:
         self.visited_funcs = visited_funcs
         self.victim_callback_info = {}
         self.attack_reenter_info = {}
-        self.original_contract = original_contract
-        self.flow_analysis = data_flow.FlowAnalysis(contracts)
+        self.input_contract = input_contract
+        self.flow_analysis = data_flow.FlowAnalysis(input_contract, contracts)
+        self.token_flow_analysis = token_flow.TokenFlowAnalysis(
+            input_contract, contracts
+        )
+        self.token_flow_analysis.set_token_flows()
+
         self.semantic_analysis = semantic_feature.AttackSemantics(contracts)
 
     def detect(self):

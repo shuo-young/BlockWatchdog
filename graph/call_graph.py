@@ -109,6 +109,11 @@ class CallGraph:
                 + "\n"
             )
             if temp_key in contracts.keys():
+                print("yes")
+                print(temp_key)
+                # print(
+                #     contracts[temp_key].external_calls
+                # )  # not print the path but exist in the graph
                 continue
 
             if temp["logic_addr"] not in self.visited_contracts:
