@@ -33,10 +33,6 @@ class AttackIdentifier:
         self.attack_reenter_info = {}
         self.input_contract = input_contract
         self.flow_analysis = data_flow.FlowAnalysis(input_contract, contracts)
-        self.token_flow_analysis = token_flow.TokenFlowAnalysis(
-            input_contract, contracts
-        )
-        self.token_flow_analysis.set_token_flows()
 
         self.semantic_analysis = semantic_feature.AttackSemantics(contracts)
 
@@ -54,11 +50,9 @@ class AttackIdentifier:
         # br and dos detection
         if self.semantic_analysis.intraprocedural_br_analysis():
             self.attack_matrix["br"] = True
-            # result = True
 
         if self.semantic_analysis.intraprocedural_dos_analysis():
             self.attack_matrix["dos"] = True
-            # result = True
 
         if self.flow_analysis.intraprocedural_fla_analysis():
             log.info("intraprocedural analysis true of flashloan attack")
@@ -73,6 +67,9 @@ class AttackIdentifier:
                     pps_near_fl_source, pps_near_fl_sink
                 )
             )
+
+        if self.semantic_analysis.op_externalcall_callback_analysis():
+            self.attack_matrix["price_manipulation"] = True
 
         # so how to define the tainted source
         # !the tainted source should only be from the analyzed contracts (i.e., input contract)

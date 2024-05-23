@@ -91,12 +91,34 @@ Leslie_FLTaintedVar(funcSign, var) :-
   PublicFunctionSelector(func, funcSign).
 
 // first use known args to recover the transfer target
-.decl Leslie_FLSensitiveCallWithRecipientIndex(callStmt:Statement, recipient:Variable, recipientIndex:number, amount:Variable)
-.output Leslie_FLSensitiveCallWithRecipientIndex
-Leslie_FLSensitiveCallWithRecipientIndex(callStmt, recipient, 0, recipient) :-
+.decl Leslie_FLSensitiveCallWithKeyArgIndex(callStmt:Statement, recipient:Variable, recipientIndex:number, amount:Variable, amountIndex:number)
+.output Leslie_FLSensitiveCallWithKeyArgIndex
+Leslie_FLSensitiveCallWithKeyArgIndex(callStmt, recipient, 0, amount, 1) :-
   CallToSignature(callStmt, "transfer(address,uint256)"),
   StatementUsesMemory_ActualMemoryArg(callStmt, _, 1, recipient),
   StatementUsesMemory_ActualMemoryArg(callStmt, _, 2, amount).
+
+Leslie_FLSensitiveCallWithKeyArgIndex(callStmt, recipient, 1, amount, 2) :-
+  CallToSignature(callStmt, "transferFrom(address,address,uint256)"),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 2, recipient),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 3, amount).
+
+Leslie_FLSensitiveCallWithKeyArgIndex(callStmt, recipient, argIndex, amount, -1) :-
+  !StatementUsesMemory_ActualMemoryArg(callStmt, _, _, _),
+  CALL(callStmt, _, recipient, amount, _, _, _, _, _),
+  PublicFunctionArg(_, funcArg, argIndex),
+  DataFlows(funcArg, recipient),
+  callFuncSig = "0x00000000".
+
+// for the function argument type transfer info
+// transfer target
+.decl Leslie_ExternalCall_TransferTarget_FuncArgType(func:Function, callStmt:Statement, pubFun:Function, argIndex:number)
+.output Leslie_ExternalCall_TransferTarget_FuncArgType
+Leslie_ExternalCall_TransferTarget_FuncArgType(func, callStmt, pubFun, argIndex) :-
+  Leslie_ExternalCallInfo(func, callStmt, _, _, _, _),
+  Leslie_FLSensitiveCall(callStmt, recipient, _),
+  PublicFunctionArg(pubFun, funcArg, argIndex),
+  DataFlows(funcArg, recipient).
 
 // the key in the attacker identification is whether the call target is the attacker contract itself
 .decl Leslie_FLSensitiveCall(callStmt:Statement, var:Variable, target:Variable)
@@ -128,6 +150,13 @@ Leslie_FLSensitiveCall(callStmt, recipient, amount) :-
   Variable_Value(const2, b),
   MSTORE(_, storeAddr2, recipient),
   a > b.
+
+Leslie_FLSensitiveCall(callStmt, recipient, amount) :-
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, funcSign),
+  Leslie_ExternalCallInfo(func, callStmt, _, _, _, _),
+  funcSign = "0x3e31ab8e", // burnToHolder
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 1, recipient),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, 2, amount).
 
 .decl Leslie_FLSensitiveLog(callStmt:Statement, index:number, var:Variable)
 .output Leslie_FLSensitiveLog
@@ -474,6 +503,17 @@ Leslie_Op_ExternalCallInLoop(funcSign, callStmt, tarFuncSign) :-
     StatementInStructuredLoop(callStmt, _),
     Leslie_ExternalCall_FuncSign_ConstType(func, callStmt, tarFuncSign).
 
+// one more semantic, the flash function is controled by the if statement
+.decl Leslie_Op_ControlledFlashCall(funcSign:symbol, callStmt:Statement, tarFuncSign:symbol)
+.output Leslie_Op_ControlledFlashCall
+Leslie_Op_ControlledFlashCall(funcSign, callStmt, tarFuncSign) :-
+  Leslie_ExternalCallInfo(func, callStmt, _, _, _, _),
+  Leslie_FunctionSelector(func, funcSign),
+  Leslie_Statement_Function(callStmt, func),
+  Leslie_ExternalCall_FuncSign_ConstType(func, callStmt, tarFuncSign),
+  ControlsWith(_, guardedBlock, _),
+  Statement_Block(callStmt, guardedBlock).
+
 .decl Leslie_Op_SoleCreate(funcSign:symbol, stmt: Statement)
 .output Leslie_Op_SoleCreate
 Leslie_Op_SoleCreate(funcSign, stmt) :-
@@ -657,6 +697,13 @@ Leslie_ExternalCall_FuncSign_ConstType(func, callStmt, funcSign) :-
   Variable_Value(actual, funcSign),
   StatementUsesMemory_ActualMemoryArg(callStmt, _, 0, actual).
 
+// fix missing abi.encode selector cases
+Leslie_ExternalCall_FuncSign_ConstType(func, callStmt, funcSign) :-
+  Leslie_ExternalCallInfo(func, callStmt, _, _, _, _),
+  CallToSignature(callStmt, sigText),
+  ConstantPossibleSigHash(funcSign, _, sigText),
+  funcSign = "0xa9059cbb".
+
 .decl Leslie_ExternalCall_FuncSign_ProxyType(func:Function, callStmt:Statement)
 .output Leslie_ExternalCall_FuncSign_ProxyType
 Leslie_ExternalCall_FuncSign_ProxyType(func, callStmt) :-
@@ -725,6 +772,16 @@ Leslie_ExternalCall_Known_Arg(func, callStmt, argIndex-1, argVal) :-
   Leslie_ExternalCallInfo(func, callStmt, _, _, _, _),
   Variable_Value(arg, argVal),
   StatementUsesMemory_ActualMemoryArg(callStmt, _, argIndex, arg),
+  argIndex != 0.
+
+// some args are stored in the storage
+.decl Leslie_ExternalCall_Known_Arg_Storage(func:Function, callStmt:Statement, argIndex:number, storageSlot:symbol)
+.output Leslie_ExternalCall_Known_Arg_Storage
+Leslie_ExternalCall_Known_Arg_Storage(func, callStmt, argIndex-1, storageSlot) :-
+  Leslie_ExternalCallInfo(func, callStmt, _, _, _, _),
+  DataFlows(var, callArg),
+  SLOADOfConst(_, storageSlot, var),
+  StatementUsesMemory_ActualMemoryArg(callStmt, _, argIndex, callArg),
   argIndex != 0.
 
 .decl Leslie_Env_Var(var:Variable, opcode:Opcode)

@@ -22,7 +22,7 @@ class Contract:
         caller,
         call_site,
         level,
-        env_val=None,
+        callArgVals={},
     ):
         self.platform = platform
         self.logic_addr = self.format_addr(logic_addr)
@@ -41,15 +41,17 @@ class Contract:
         self.block_number = block_number
         self.caller = caller
         self.call_site = call_site
-        self.callArgVals = {}
+        self.callArgVals = callArgVals
         self.knownArgVals = {}
         self.url = ""
         self.external_calls = []
         self.level = level
         self.createbin = False
         self.storage_space = {}
-        self.env_val = env_val
-        logging.info("external call env_val: {}".format(self.env_val))
+        # self.env_val = env_val
+        logging.info(
+            "known function args from the previous call: {}".format(self.callArgVals)
+        )
         self.analyze()
 
     def format_addr(self, addr):
@@ -199,24 +201,28 @@ class Contract:
 
     # add env var tracer (also known dynamically)
     def set_callArgVals(self):
-        if self.caller != "":
-            loc = (
-                "./gigahorse-toolchain/.temp/"
-                + self.caller
-                + "/out/Leslie_ExternalCall_Known_Arg.csv"
-            )
-            if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-                df = pd.read_csv(loc, header=None, sep="	")
-                df.columns = ["func", "callStmt", "argIndex", "argVal"]
-                # it is not neccessary to label the func, just focus on the callStmt
-                df = df.loc[df["callStmt"] == self.call_site]
-                for i in range(len(df)):
-                    temp_index = int(df.iloc[i]["argIndex"])
-                    temp_callArgVal = df.iloc[i]["argVal"]
-                    self.callArgVals[temp_index] = temp_callArgVal
-            if self.env_val is not None:
-                for index in self.env_val.keys():
-                    self.callArgVals[index] = self.env_val[index]
+        # change code to read the known_args from the previous contract call
+        # if self.caller != "":
+        #     self.callArgVals = self.knownArgVals
+        # if self.caller != "":
+        #     loc = (
+        #         "./gigahorse-toolchain/.temp/"
+        #         + self.caller
+        #         + "/out/Leslie_ExternalCall_Known_Arg.csv"
+        #     )
+        #     if os.path.exists(loc) and (os.path.getsize(loc) > 0):
+        #         df = pd.read_csv(loc, header=None, sep="	")
+        #         df.columns = ["func", "callStmt", "argIndex", "argVal"]
+        #         # it is not neccessary to label the func, just focus on the callStmt
+        #         df = df.loc[df["callStmt"] == self.call_site]
+        #         for i in range(len(df)):
+        #             temp_index = int(df.iloc[i]["argIndex"])
+        #             temp_callArgVal = df.iloc[i]["argVal"]
+        #             self.callArgVals[temp_index] = temp_callArgVal
+        #     if self.env_val is not None:
+        #         for index in self.env_val.keys():
+        #             self.callArgVals[index] = self.env_val[index]
+        print("====call arg vals {}====".format(self.callArgVals))
 
     def get_fl_transfer(self):
         loc = (
@@ -238,14 +244,27 @@ class Contract:
             global_params.OUTPUT_PATH
             + ".temp/"
             + self.logic_addr
-            + "/out/Leslie_FLSensitiveCallWithRecipientIndex.csv"
+            + "/out/Leslie_FLSensitiveCallWithKeyArgIndex.csv"
         )
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
             df = pd.read_csv(loc, header=None, sep="	")
-            df.columns = ["callStmt", "recipient", "recipientIndex", "amount"]
+            df.columns = [
+                "callStmt",
+                "recipient",
+                "recipientIndex",
+                "amount",
+                "amountIndex",
+            ]
             # df = df.loc[df["funcSign"] == self.func_sign]
             for i in range(len(df)):
-                call[df.iloc[i]["callStmt"]] = int(df.iloc[i]["recipientIndex"])
+                if df.iloc[i]["amountIndex"] > 0:
+                    call[df.iloc[i]["callStmt"]] = {
+                        "cur": int(df.iloc[i]["recipientIndex"])
+                    }
+                else:
+                    call[df.iloc[i]["callStmt"]] = {
+                        "arg": int(df.iloc[i]["recipientIndex"])
+                    }
         return call
 
     def set_knownArgVals(self):
@@ -257,8 +276,6 @@ class Contract:
         if os.path.exists(loc) and (os.path.getsize(loc) > 0):
             df = pd.read_csv(loc, header=None, sep="	")
             df.columns = ["func", "callStmt", "argIndex", "argVal"]
-            # it is not neccessary to label the func, just focus on the callStmt
-            call_arg_vals = {}
             for i in range(len(df)):
                 temp_index = int(df.iloc[i]["argIndex"])
                 temp_callArgVal = df.iloc[i]["argVal"]
@@ -267,6 +284,29 @@ class Contract:
                     self.knownArgVals[temp_stmt] = {}
                 self.knownArgVals[temp_stmt][temp_index] = temp_callArgVal
             logging.info(self.knownArgVals)
+
+        known_storage_env_loc = (
+            "./gigahorse-toolchain/.temp/"
+            + self.logic_addr
+            + "/out/Leslie_ExternalCall_Known_Arg_Storage.csv"
+        )
+        if os.path.exists(known_storage_env_loc) and (
+            os.path.getsize(known_storage_env_loc) > 0
+        ):
+            df = pd.read_csv(known_storage_env_loc, header=None, sep="	")
+            df.columns = ["func", "callStmt", "argIndex", "storageSlot"]
+            for i in range(len(df)):
+                temp_index = int(df.iloc[i]["argIndex"])
+                temp_storageSlot = int(df.iloc[i]["storageSlot"], 16)
+                if df.iloc[i]["callStmt"] in self.knownArgVals.keys():
+                    self.knownArgVals[df.iloc[i]["callStmt"]][temp_index] = (
+                        self.get_storage_content(temp_storageSlot, 0, 19)
+                    )
+                else:
+                    self.knownArgVals[df.iloc[i]["callStmt"]] = {}
+                    self.knownArgVals[df.iloc[i]["callStmt"]][temp_index] = (
+                        self.get_storage_content(temp_storageSlot, 0, 19)
+                    )
 
         loc_env = (
             "./gigahorse-toolchain/.temp/"
@@ -277,8 +317,6 @@ class Contract:
         if os.path.exists(loc_env) and (os.path.getsize(loc_env) > 0):
             df = pd.read_csv(loc_env, header=None, sep="	")
             df.columns = ["func", "callStmt", "argIndex", "opcode"]
-            # it is not neccessary to label the func, just focus on the callStmt
-
             for i in range(len(df)):
                 temp_index = int(df.iloc[i]["argIndex"])
                 env_op = df.iloc[i]["opcode"]
@@ -297,8 +335,36 @@ class Contract:
                     self.knownArgVals[df.iloc[i]["callStmt"]][
                         temp_index
                     ] = temp_callArgVal
-        print("====known arg vals====")
-        print(self.knownArgVals)
+        # then, set known call arg flow from the function arguments by the callArgs
+        loc_spread_rule = (
+            "./gigahorse-toolchain/.temp/"
+            + self.logic_addr
+            + "/out/Leslie_Spread_FuncArgToCallArg.csv"
+        )
+        if os.path.exists(loc_spread_rule) and (os.path.getsize(loc_spread_rule) > 0):
+            df = pd.read_csv(loc_spread_rule, header=None, sep="	")
+            df.columns = [
+                "funcSign",
+                "funcArgIndex",
+                "funcArg",
+                "callStmt",
+                "callArgIndex",
+                "callArg",
+            ]
+            df = df.loc[df["funcSign"] == self.func_sign]
+            for i in range(len(df)):
+                if df.iloc[i]["funcArgIndex"] in self.callArgVals.keys():
+                    if df.iloc[i]["callStmt"] in self.knownArgVals.keys():
+                        self.knownArgVals[df.iloc[i]["callStmt"]][
+                            df.iloc[i]["callArgIndex"]
+                        ] = self.callArgVals[df.iloc[i]["funcArgIndex"]]
+                    else:
+                        self.knownArgVals[df.iloc[i]["callStmt"]] = {}
+                        self.knownArgVals[df.iloc[i]["callStmt"]][
+                            df.iloc[i]["callArgIndex"]
+                        ] = self.callArgVals[df.iloc[i]["funcArgIndex"]]
+
+        print("====known arg vals {}====".format(self.knownArgVals))
 
     # in some cases, the storage address is not the same as the logic address
     def get_storage_content(self, slot_index, byteLow, byteHigh):
@@ -453,6 +519,24 @@ class Contract:
         else:
             df_callee_funarg = pd.DataFrame()
 
+        loc_transfer_target_funarg = (
+            "./gigahorse-toolchain/.temp/"
+            + self.logic_addr
+            + "/out/Leslie_ExternalCall_TransferTarget_FuncArgType.csv"
+        )
+        if os.path.exists(loc_transfer_target_funarg) and (
+            os.path.getsize(loc_transfer_target_funarg) > 0
+        ):
+            df_transfer_target_funarg = pd.read_csv(
+                loc_transfer_target_funarg, header=None, sep="	"
+            )
+            df_transfer_target_funarg.columns = [
+                "func",
+                "callStmt",
+                "pubFun",
+                "argIndex",
+            ]
+
         transfer_target_call = self.get_sensitive_transfer_target()
         log.info("transfer target call")
         log.info(transfer_target_call)
@@ -472,21 +556,36 @@ class Contract:
             }
             if call_stmt in transfer_target_call.keys():
                 if call_stmt in self.knownArgVals.keys():
-                    print("====has known args in the call stmt ", call_stmt, "====")
-                    print(self.knownArgVals[call_stmt])
-                    print("====transfer target call====")
-                    print(transfer_target_call)
-                    if (
-                        transfer_target_call[call_stmt]
-                        in self.knownArgVals[call_stmt].keys()
-                    ):
-                        external_call["transfer_target"] = self.knownArgVals[call_stmt][
-                            transfer_target_call[call_stmt]
-                        ]
-                        log.info("====transfer target====")
-                        log.info(external_call["transfer_target"])
-                        print("====transfer target====")
-                        print(external_call["transfer_target"])
+                    # print("====has known args in the call stmt ", call_stmt, "====")
+                    # print(self.knownArgVals[call_stmt])
+                    # print("====transfer target call====")
+                    # print(transfer_target_call)
+                    # current env vars
+                    if "cur" in transfer_target_call[call_stmt].keys():
+                        if (
+                            transfer_target_call[call_stmt]["cur"]
+                            in self.knownArgVals[call_stmt].keys()
+                        ):
+                            external_call["transfer_target"] = self.knownArgVals[
+                                call_stmt
+                            ][transfer_target_call[call_stmt]["cur"]]
+                            log.info("====transfer target====")
+                            log.info(external_call["transfer_target"])
+                        # print("====transfer target====")
+                        # print(external_call["transfer_target"])
+                else:  # recover from args
+                    if "arg" in transfer_target_call[call_stmt].keys():
+                        if (
+                            transfer_target_call[call_stmt]["arg"]
+                            in self.callArgVals.keys()
+                        ):
+                            external_call["transfer_target"] = self.callArgVals[
+                                transfer_target_call[call_stmt]["arg"]
+                            ]
+                            log.info("====transfer target====")
+                            log.info(external_call["transfer_target"])
+                        # print("====transfer target====")
+                        # print(external_call["transfer_target"])
 
             if len(df_callee_const) != 0:
                 df_temp = df_callee_const.loc[df_callee_const["callStmt"] == call_stmt]
@@ -555,6 +654,9 @@ class Contract:
                 external_call["storage_addr"] = self.logic_addr
                 external_call["caller"] = self.caller
                 external_call["call_site"] = self.call_site
+                external_call["known_args"] = (
+                    self.callArgVals
+                )  # propogate the function arguments
             else:
                 external_call["storage_addr"] = external_call["logic_addr"]
                 external_call["caller"] = self.logic_addr
@@ -572,6 +674,6 @@ class Contract:
                     external_call["funcSign"] = func_sign
             # print(external_call)
             self.external_calls.append(external_call)
-            if external_call["funcSign"] == "0xa9059cbb":
-                print("transfer call identified")
-                print(external_call)
+            # if external_call["funcSign"] == "0xa9059cbb":
+            #     print("transfer call identified")
+            print("====external call {}".format(external_call))

@@ -47,6 +47,15 @@ if __name__ == "__main__":
         default=16000000,
     )
     parser.add_argument(
+        "-fs",
+        "--function_signature",
+        help="The function signature to be analyzed",
+        action="store",
+        dest="func_sign",
+        type=str,
+        default="",
+    )
+    parser.add_argument(
         "-v", "--verbose", help="Verbose output, print everything.", action="store_true"
     )
     args = parser.parse_args()
@@ -69,7 +78,7 @@ if __name__ == "__main__":
         storage_addr = args.logic_addr
     else:
         storage_addr = args.storage_addr
-
+    logging.info("testing function signature {}...".format(args.func_sign))
     source = {
         "platform": args.platform,
         "logic_addr": args.logic_addr,
@@ -80,7 +89,7 @@ if __name__ == "__main__":
         "caller_func_sign": "",  # default trace all functions (with external calls)
         "call_site": "",  # default blank
         "level": 0,  # trace depth
-        "env_val": None,
+        "callArgVals": {},
     }
     begin = time.perf_counter()
 
@@ -95,12 +104,15 @@ if __name__ == "__main__":
         source["caller"],
         source["call_site"],
         source["level"],
-        source["env_val"],
+        source["callArgVals"],
     )
     func_sign_list = original_contract.get_func_sign_list()
-    external_call_in_func_sigature = (
-        original_contract.get_external_call_in_func_sigature()
-    )
+    if args.func_sign == "":
+        external_call_in_func_sigature = (
+            original_contract.get_external_call_in_func_sigature()
+        )
+    else:
+        external_call_in_func_sigature = [args.func_sign]
 
     # store the signatures of functions that contain external calls
     store_external_call_in_func_sigature_list = []
@@ -144,7 +156,7 @@ if __name__ == "__main__":
         if "__function_selector__" in external_call_in_func_sigature:
             external_call_in_func_sigature.remove("__function_selector__")
 
-        external_call_in_func_sigature = ["0x4641257d"]
+        # external_call_in_func_sigature = ["0xa1d48336"]
         max_call_depth = 0
         # for every functions that contains external calls
         while len(external_call_in_func_sigature) > 0:
@@ -158,9 +170,9 @@ if __name__ == "__main__":
                 "caller_func_sign": "",
                 "call_site": "",
                 "level": 0,
-                "env_val": None,
+                "callArgVals": {},
             }
-            source["func_sign"] = external_call_in_func_sigature.pop()
+            source["func_sign"] = external_call_in_func_sigature.pop(0)
             cross_contract_call_graph = CallGraph(source, contracts, source["platform"])
             cross_contract_call_graph.construct_cross_contract_call_graph()
             visited_contracts = (

@@ -66,6 +66,7 @@ class CallGraph:
         index = 0
         while len(pending) > 0:
             temp = pending.pop()
+            # print("current contract: ", temp)
             temp["platform"] = self.platform
             index += 1
             if temp["level"] > self.max_level:
@@ -109,8 +110,8 @@ class CallGraph:
                 + "\n"
             )
             if temp_key in contracts.keys():
-                print("yes")
-                print(temp_key)
+                # print("yes")
+                # print(temp_key)
                 # print(
                 #     contracts[temp_key].external_calls
                 # )  # not print the path but exist in the graph
@@ -130,7 +131,7 @@ class CallGraph:
                 temp["caller"],
                 temp["call_site"],
                 temp["level"],
-                temp["env_val"],
+                temp["callArgVals"],
             )
             for external_call in contracts[temp_key].external_calls:
                 if (
@@ -149,6 +150,6 @@ class CallGraph:
                             "call_site": external_call["call_site"],
                             "level": temp["level"] + 1,
                             "caller_func_sign": temp["func_sign"],
-                            "env_val": external_call["known_args"],
+                            "callArgVals": external_call["known_args"],
                         }
                     )

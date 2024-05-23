@@ -1,6 +1,7 @@
 import logging
 import os
 
+from flow.token_flow import TokenFlowAnalysis
 import global_params
 import pandas as pd
 
@@ -27,6 +28,8 @@ class FlowAnalysis:
     ):
         self.contracts = contracts
         self.input_contract = input_contract
+        self.token_flow_analysis = TokenFlowAnalysis(input_contract, contracts)
+        self.token_flow_analysis.set_token_flows()
 
     # helper
     def find_executed_pp(self, caller, callsite, contract_addr, func_sign):
@@ -158,9 +161,25 @@ class FlowAnalysis:
                     log.info(key)
                     print(key)
                     print(temp_address)
-                    # not the input contract which is under test
-                    if temp_address != self.input_contract:
-                        res.append(key)
+                    # not the input contract which is under test (assumed attacker)
+                    if (
+                        temp_address != self.input_contract
+                        and temp_funcSign != "0x22c0d9f"
+                    ):
+                        # tighter rule: the transfer target should be the input contract while the transfer amount is tainted\
+                        for token_flow in self.token_flow_analysis.token_flows:
+                            if (
+                                token_flow["to"] == self.input_contract
+                                and token_flow["from"] == temp_address
+                                and token_flow["address"] != ""
+                            ):  # and the amount is tainted
+                                res.append(key)
+                                print(
+                                    "found flash loan vulnerability in contract "
+                                    + temp_address
+                                    + ", which is targeted by the attacker contract "
+                                    + self.input_contract
+                                )
                     # return True
         if len(res) > 0:
             return True
