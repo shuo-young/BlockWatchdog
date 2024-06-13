@@ -701,8 +701,7 @@ Leslie_ExternalCall_FuncSign_ConstType(func, callStmt, funcSign) :-
 Leslie_ExternalCall_FuncSign_ConstType(func, callStmt, funcSign) :-
   Leslie_ExternalCallInfo(func, callStmt, _, _, _, _),
   CallToSignature(callStmt, sigText),
-  ConstantPossibleSigHash(funcSign, _, sigText),
-  funcSign = "0xa9059cbb".
+  ConstantPossibleSigHash(funcSign, _, sigText).
 
 .decl Leslie_ExternalCall_FuncSign_ProxyType(func:Function, callStmt:Statement)
 .output Leslie_ExternalCall_FuncSign_ProxyType

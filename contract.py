@@ -222,7 +222,7 @@ class Contract:
         #     if self.env_val is not None:
         #         for index in self.env_val.keys():
         #             self.callArgVals[index] = self.env_val[index]
-        print("====call arg vals {}====".format(self.callArgVals))
+        log.info("====call arg vals {}====".format(self.callArgVals))
 
     def get_fl_transfer(self):
         loc = (
@@ -285,28 +285,30 @@ class Contract:
                 self.knownArgVals[temp_stmt][temp_index] = temp_callArgVal
             logging.info(self.knownArgVals)
 
-        known_storage_env_loc = (
-            "./gigahorse-toolchain/.temp/"
-            + self.logic_addr
-            + "/out/Leslie_ExternalCall_Known_Arg_Storage.csv"
-        )
-        if os.path.exists(known_storage_env_loc) and (
-            os.path.getsize(known_storage_env_loc) > 0
-        ):
-            df = pd.read_csv(known_storage_env_loc, header=None, sep="	")
-            df.columns = ["func", "callStmt", "argIndex", "storageSlot"]
-            for i in range(len(df)):
-                temp_index = int(df.iloc[i]["argIndex"])
-                temp_storageSlot = int(df.iloc[i]["storageSlot"], 16)
-                if df.iloc[i]["callStmt"] in self.knownArgVals.keys():
-                    self.knownArgVals[df.iloc[i]["callStmt"]][temp_index] = (
-                        self.get_storage_content(temp_storageSlot, 0, 19)
-                    )
-                else:
-                    self.knownArgVals[df.iloc[i]["callStmt"]] = {}
-                    self.knownArgVals[df.iloc[i]["callStmt"]][temp_index] = (
-                        self.get_storage_content(temp_storageSlot, 0, 19)
-                    )
+        # big overhead for rpc request
+        if global_params.CALLARG_STORAGETYPE:
+            known_storage_env_loc = (
+                "./gigahorse-toolchain/.temp/"
+                + self.logic_addr
+                + "/out/Leslie_ExternalCall_Known_Arg_Storage.csv"
+            )
+            if os.path.exists(known_storage_env_loc) and (
+                os.path.getsize(known_storage_env_loc) > 0
+            ):
+                df = pd.read_csv(known_storage_env_loc, header=None, sep="	")
+                df.columns = ["func", "callStmt", "argIndex", "storageSlot"]
+                for i in range(len(df)):
+                    temp_index = int(df.iloc[i]["argIndex"])
+                    temp_storageSlot = int(df.iloc[i]["storageSlot"], 16)
+                    if df.iloc[i]["callStmt"] in self.knownArgVals.keys():
+                        self.knownArgVals[df.iloc[i]["callStmt"]][temp_index] = (
+                            self.get_storage_content(temp_storageSlot, 0, 19)
+                        )
+                    else:
+                        self.knownArgVals[df.iloc[i]["callStmt"]] = {}
+                        self.knownArgVals[df.iloc[i]["callStmt"]][temp_index] = (
+                            self.get_storage_content(temp_storageSlot, 0, 19)
+                        )
 
         loc_env = (
             "./gigahorse-toolchain/.temp/"
@@ -364,7 +366,7 @@ class Contract:
                             df.iloc[i]["callArgIndex"]
                         ] = self.callArgVals[df.iloc[i]["funcArgIndex"]]
 
-        print("====known arg vals {}====".format(self.knownArgVals))
+        log.info("====known arg vals {}====".format(self.knownArgVals))
 
     # in some cases, the storage address is not the same as the logic address
     def get_storage_content(self, slot_index, byteLow, byteHigh):
@@ -676,4 +678,4 @@ class Contract:
             self.external_calls.append(external_call)
             # if external_call["funcSign"] == "0xa9059cbb":
             #     print("transfer call identified")
-            print("====external call {}".format(external_call))
+            log.info("====external call {}".format(external_call))

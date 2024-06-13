@@ -58,6 +58,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "-v", "--verbose", help="Verbose output, print everything.", action="store_true"
     )
+    parser.add_argument(
+        "-cc",
+        "--complete_callflow",
+        help="Fetch storage type call arg value for complete call flow recovery.",
+        action="store_true",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -70,6 +76,9 @@ if __name__ == "__main__":
         rootLogger.setLevel(level=logging.INFO)
     else:
         rootLogger.setLevel(level=logging.WARNING)
+
+    if args.complete_callflow:
+        global_params.CALLARG_STORAGETYPE = True
 
     contracts = {}
     # default: storage_addr is the same as logic_addr

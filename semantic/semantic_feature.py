@@ -1,8 +1,9 @@
 import global_params
 import os
 import pandas as pd
+import logging
 
-
+log = logging.getLogger(__name__)
 class AttackSemantics:
     def __init__(self, contracts):
         self.contracts = contracts
@@ -11,7 +12,7 @@ class AttackSemantics:
         # pending...
         flashcallback_list = ["0xa1d48336"]
         flashcallfunc_list = ["0x490e6cbc"]
-        print("=======analyzing externalcall in the callback")
+        log.info("analyzing externalcall in the callback")
         for key in self.contracts.keys():
             if self.contracts[key].level == 0:
                 temp_address = key.split("_")[2]

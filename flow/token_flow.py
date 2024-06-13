@@ -47,8 +47,7 @@ class TokenFlowAnalysis:
                         "",
                         ec["logic_addr"],  # token address
                     )
-        print("recovered token flows")
-        print(self.token_flows)
+        print("recovered token flows: {}".format(self.token_flows))
 
     def analysis(self):
         for key in self.contracts.keys():
