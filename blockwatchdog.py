@@ -1,103 +1,104 @@
+"""BlockWatchdog: Smart Contract Attack Detection Tool
+
+This module serves as the main entry point for BlockWatchdog, a tool for detecting
+premeditated attacks and vulnerabilities in Ethereum smart contracts.
+"""
+
 import argparse
 import json
 import logging
 import time
+from typing import Dict, List, Any
 
 import global_params
 from contract import Contract
 from graph.call_graph import CallGraph
 from identifier import AttackIdentifier
 
-if __name__ == "__main__":
-    # Main Body
-    parser = argparse.ArgumentParser()
+def create_argument_parser() -> argparse.ArgumentParser:
+    """Create and configure command line argument parser."""
+    parser = argparse.ArgumentParser(
+        description='BlockWatchdog: Smart Contract Attack Detection Tool'
+    )
     parser.add_argument(
-        "-bp",
-        "--blockchain_platform",
+        "-bp", "--blockchain_platform",
         help="The blockchain platform where the test contract is deployed",
-        action="store",
         dest="platform",
         type=str,
         default="ETH",
+        choices=["ETH", "BSC", "FTM", "ARB"]
     )
     parser.add_argument(
-        "-la",
-        "--logic_address",
+        "-la", "--logic_address",
         help="Contract address for storing business logic",
-        action="store",
         dest="logic_addr",
         type=str,
+        required=True
     )
     parser.add_argument(
-        "-sa",
-        "--storage_address",
+        "-sa", "--storage_address",
         help="Contract address for storing business data",
-        action="store",
         dest="storage_addr",
         type=str,
-        default="",
+        default=""
     )
     parser.add_argument(
-        "-bn",
-        "--block_number",
+        "-bn", "--block_number",
         help="Blockchain snapshot",
-        action="store",
         dest="block_number",
         type=int,
-        default=16000000,
+        default=16000000
     )
     parser.add_argument(
-        "-fs",
-        "--function_signature",
+        "-fs", "--function_signature",
         help="The function signature to be analyzed",
-        action="store",
         dest="func_sign",
         type=str,
-        default="",
+        default=""
     )
     parser.add_argument(
-        "-v", "--verbose", help="Verbose output, print everything.", action="store_true"
+        "-v", "--verbose",
+        help="Verbose output, print everything.",
+        action="store_true"
     )
     parser.add_argument(
-        "-cc",
-        "--complete_callflow",
+        "-cc", "--complete_callflow",
         help="Fetch storage type call arg value for complete call flow recovery.",
-        action="store_true",
+        action="store_true"
     )
-    args = parser.parse_args()
+    
+    return parser
 
+
+def setup_logging(verbose: bool) -> None:
+    """Configure logging based on verbosity level."""
     logging.basicConfig(
         format="[%(levelname)s][%(filename)s:%(lineno)d]: %(message)s",
         datefmt="%Y.%m.%d. %H:%M:%S",
     )
-    rootLogger = logging.getLogger(None)
-
-    if args.verbose:
-        rootLogger.setLevel(level=logging.INFO)
+    root_logger = logging.getLogger(None)
+    
+    if verbose:
+        root_logger.setLevel(level=logging.INFO)
     else:
-        rootLogger.setLevel(level=logging.WARNING)
+        root_logger.setLevel(level=logging.WARNING)
 
-    if args.complete_callflow:
-        global_params.CALLARG_STORAGETYPE = True
 
-    contracts = {}
-    # default: storage_addr is the same as logic_addr
-    storage_addr = ""
-    if args.storage_addr == "":
-        storage_addr = args.logic_addr
-    else:
-        storage_addr = args.storage_addr
-    logging.info("testing function signature {}...".format(args.func_sign))
-    source = {
+
+def create_source_config(args: argparse.Namespace) -> Dict[str, Any]:
+    """Create source configuration dictionary from command line arguments."""
+    storage_addr = args.storage_addr if args.storage_addr else args.logic_addr
+    
+    return {
         "platform": args.platform,
         "logic_addr": args.logic_addr,
         "storage_addr": storage_addr,
         "func_sign": "",
         "block_number": args.block_number,
-        "caller": "msg.sender",  # assume the attacker EOA
-        "caller_func_sign": "",  # default trace all functions (with external calls)
-        "call_site": "",  # default blank
-        "level": 0,  # trace depth
+        "caller": "msg.sender",
+        "caller_func_sign": "",
+        "call_site": "",
+        "level": 0,
         "callArgVals": {},
     }
     begin = time.perf_counter()
@@ -133,70 +134,61 @@ if __name__ == "__main__":
     # the max call depths of a contract
     m_call_depth = 0
 
-    # if no runtime bin, just run __function_selector__ for the createbin
-    is_createbin = original_contract.is_createbin()
-    call_graph_str = ""
-    if is_createbin:
-        max_call_depth = 0
-        source = {
-            "platform": args.platform,
-            "logic_addr": args.logic_addr,
-            "storage_addr": storage_addr,
-            "func_sign": "",
-            "block_number": args.block_number,
-            "caller": "msg.sender",
-            "caller_func_sign": "",
-            "call_site": "",
-            "level": 0,
-        }
-        source["func_sign"] = "__function_selector__"
-        cross_contract_call_graph = CallGraph(source, contracts, source["platform"])
-        cross_contract_call_graph.construct_cross_contract_call_graph()
-        visited_contracts = (
-            visited_contracts + cross_contract_call_graph.visited_contracts
-        )
-        visited_funcs = visited_funcs + cross_contract_call_graph.visited_funcs
-        m_call_depth = cross_contract_call_graph.max_level
 
+
+def process_createbin_contract(
+    source: Dict[str, Any], contracts: Dict[str, Any]
+) -> tuple[List[str], int, List[str], List[str]]:
+    """Process contracts that only have creation bytecode."""
+    call_paths = []
+    visited_contracts = []
+    visited_funcs = []
+    
+    source["func_sign"] = "__function_selector__"
+    cross_contract_call_graph = CallGraph(source, contracts, source["platform"])
+    cross_contract_call_graph.construct_cross_contract_call_graph()
+    
+    visited_contracts.extend(cross_contract_call_graph.visited_contracts)
+    visited_funcs.extend(cross_contract_call_graph.visited_funcs)
+    max_call_depth = cross_contract_call_graph.max_level
+    
+    call_graph_str = cross_contract_call_graph.get_output()
+    call_paths.append(call_graph_str)
+    
+    return call_paths, max_call_depth, visited_contracts, visited_funcs
+
+
+def process_runtime_contract(
+    external_call_signatures: List[str], source: Dict[str, Any], contracts: Dict[str, Any]
+) -> tuple[List[str], int, List[str], List[str]]:
+    """Process contracts with runtime bytecode by analyzing all functions with external calls."""
+    call_paths = []
+    visited_contracts = []
+    visited_funcs = []
+    max_call_depth = 0
+    
+    if "__function_selector__" in external_call_signatures:
+        external_call_signatures.remove("__function_selector__")
+    
+    while external_call_signatures:
+        source_copy = source.copy()
+        source_copy["func_sign"] = external_call_signatures.pop(0)
+        source_copy["callArgVals"] = {}
+        
+        cross_contract_call_graph = CallGraph(source_copy, contracts, source_copy["platform"])
+        cross_contract_call_graph.construct_cross_contract_call_graph()
+        
+        visited_contracts.extend(cross_contract_call_graph.visited_contracts)
+        visited_funcs.extend(cross_contract_call_graph.visited_funcs)
+        
+        call_depth = cross_contract_call_graph.max_level
+        if call_depth > max_call_depth:
+            max_call_depth = call_depth
+        
         call_graph_str = cross_contract_call_graph.get_output()
         call_paths.append(call_graph_str)
-    else:
-        # run all pub funs and remove function selector
-        if "__function_selector__" in external_call_in_func_sigature:
-            external_call_in_func_sigature.remove("__function_selector__")
-
-        # external_call_in_func_sigature = ["0xa1d48336"]
-        max_call_depth = 0
-        # for every functions that contains external calls
-        while len(external_call_in_func_sigature) > 0:
-            source = {
-                "platform": args.platform,
-                "logic_addr": args.logic_addr,
-                "storage_addr": storage_addr,
-                "func_sign": "",
-                "block_number": args.block_number,
-                "caller": "msg.sender",
-                "caller_func_sign": "",
-                "call_site": "",
-                "level": 0,
-                "callArgVals": {},
-            }
-            source["func_sign"] = external_call_in_func_sigature.pop(0)
-            cross_contract_call_graph = CallGraph(source, contracts, source["platform"])
-            cross_contract_call_graph.construct_cross_contract_call_graph()
-            visited_contracts = (
-                visited_contracts + cross_contract_call_graph.visited_contracts
-            )
-            visited_funcs = visited_funcs + cross_contract_call_graph.visited_funcs
-            call_depth = cross_contract_call_graph.max_level
-
-            if call_depth > max_call_depth:
-                max_call_depth = call_depth
-
-            call_graph_str = cross_contract_call_graph.get_output()
-            call_paths.append(call_graph_str)
-
-        m_call_depth = max_call_depth
+    
+    return call_paths, max_call_depth, visited_contracts, visited_funcs
 
     detector = AttackIdentifier(
         source["logic_addr"],
@@ -206,7 +198,11 @@ if __name__ == "__main__":
         visited_contracts,
         visited_funcs,
     )
-    result = {
+
+
+def initialize_result_structure(args: argparse.Namespace) -> Dict[str, Any]:
+    """Initialize the result dictionary with default values."""
+    return {
         "is_attack": False,
         "warning": "medium",
         "attack_matrix": {},
@@ -249,25 +245,32 @@ if __name__ == "__main__":
     result["visited_funcs"] = list(set(visited_funcs))
     result["visited_funcs_num"] = len(list(set(visited_funcs)))
 
-    result["semantic_features"]["op_creation"][
-        "op_multicreate"
-    ] = detector.semantic_analysis.op_multicreate_analysis()
-    result["semantic_features"]["op_creation"][
-        "op_solecreate"
-    ] = detector.semantic_analysis.op_solecreate_analysis()
-    result["semantic_features"][
-        "op_selfdestruct"
-    ] = detector.semantic_analysis.op_selfdestruct_analysis()
-    result["semantic_features"][
-        "op_env"
-    ] = detector.flow_analysis.tainted_env_call_arg()
 
-    result["external_call"][
-        "externalcall_inhook"
-    ] = detector.semantic_analysis.externalcall_inhook()
-    result["external_call"][
-        "externalcall_infallback"
-    ] = detector.semantic_analysis.externalcall_infallback()
+
+def populate_semantic_features(
+    result: Dict[str, Any], detector: AttackIdentifier
+) -> None:
+    """Populate semantic features in the result dictionary."""
+    semantic_features = result["semantic_features"]
+    
+    semantic_features["op_creation"]["op_multicreate"] = (
+        detector.semantic_analysis.op_multicreate_analysis()
+    )
+    semantic_features["op_creation"]["op_solecreate"] = (
+        detector.semantic_analysis.op_solecreate_analysis()
+    )
+    semantic_features["op_selfdestruct"] = (
+        detector.semantic_analysis.op_selfdestruct_analysis()
+    )
+    semantic_features["op_env"] = detector.flow_analysis.tainted_env_call_arg()
+    
+    external_call = result["external_call"]
+    external_call["externalcall_inhook"] = (
+        detector.semantic_analysis.externalcall_inhook()
+    )
+    external_call["externalcall_infallback"] = (
+        detector.semantic_analysis.externalcall_infallback()
+    )
 
     sensitive_callsigs = detector.get_sig_info()
     victim_callback_info, attack_reenter_info = detector.get_reen_info()
@@ -298,20 +301,23 @@ if __name__ == "__main__":
         for i in overlap:
             result["overlap"]["overlap_external_call"].append(i)
 
+
+
+def calculate_warning_level(result: Dict[str, Any]) -> str:
+    """Calculate warning level based on semantic features and overlaps."""
+    semantic = result["semantic_features"]
+    
     if (
-        result["semantic_features"]["op_creation"]["op_multicreate"]
-        or result["semantic_features"]["op_creation"]["op_solecreate"]
-        or result["semantic_features"]["op_selfdestruct"]
-        or result["semantic_features"]["op_env"]
+        semantic["op_creation"]["op_multicreate"]
+        or semantic["op_creation"]["op_solecreate"]
+        or semantic["op_selfdestruct"]
+        or semantic["op_env"]
+        or result["overlap"]["has_overlap"]
+        or result["external_call"]["externalcall_inhook"]
     ):
-        result["warning"] = "high"
-
-    # just has overlap, lift the warning
-    if result["overlap"]["has_overlap"]:
-        result["warning"] = "high"
-
-    if result["external_call"]["externalcall_inhook"]:
-        result["warning"] = "high"
+        return "high"
+    
+    return "medium"
 
     if is_createbin:
         result["analysis_loc"] = "createbin"
@@ -320,19 +326,125 @@ if __name__ == "__main__":
 
     end = time.perf_counter()
 
-    res = {}
-    res[args.logic_addr] = result
-    result["time"] = end - begin
 
-    print(res)
 
-    store_path = global_params.JSON_PATH + args.logic_addr + ".json"
-    # uncomment if not need to rewrite
-    # if not os.path.exists(store_path):
+def save_results(
+    result: Dict[str, Any], logic_addr: str, execution_time: float
+) -> None:
+    """Save analysis results to JSON file."""
+    result["time"] = execution_time
+    output = {logic_addr: result}
+    
+    print(output)
+    
+    store_path = global_params.JSON_PATH + logic_addr + ".json"
     with open(store_path, "w", encoding="utf-8") as f:
-        f.write(json.dumps(res, indent=2, ensure_ascii=False))
+        f.write(json.dumps(output, indent=2, ensure_ascii=False))
 
-    # uncomment if need remove temp files
-    # for contract in list(set(visited_contracts)):
-    #     if os.path.exists(TEMP_WORKING_DIR + contract):
-    #         shutil.rmtree(TEMP_WORKING_DIR + contract)
+
+
+def main() -> None:
+    """Main analysis workflow for BlockWatchdog."""
+    parser = create_argument_parser()
+    args = parser.parse_args()
+    
+    setup_logging(args.verbose)
+    
+    if args.complete_callflow:
+        global_params.CALLARG_STORAGETYPE = True
+    
+    logging.info(f"Testing function signature {args.func_sign}...")
+    
+    contracts = {}
+    source = create_source_config(args)
+    start_time = time.perf_counter()
+    
+    original_contract = Contract(
+        source["platform"],
+        source["logic_addr"],
+        source["storage_addr"],
+        source["func_sign"],
+        source["block_number"],
+        source["caller"],
+        source["call_site"],
+        source["level"],
+        source["callArgVals"],
+    )
+    
+    func_sign_list = original_contract.get_func_sign_list()
+    
+    if args.func_sign:
+        external_call_signatures = [args.func_sign]
+    else:
+        external_call_signatures = original_contract.get_external_call_in_func_sigature()
+    
+    external_call_signatures_backup = external_call_signatures.copy()
+    
+    is_createbin = original_contract.is_createbin()
+    
+    if is_createbin:
+        call_paths, max_call_depth, visited_contracts, visited_funcs = (
+            process_createbin_contract(source, contracts)
+        )
+    else:
+        call_paths, max_call_depth, visited_contracts, visited_funcs = (
+            process_runtime_contract(external_call_signatures, source, contracts)
+        )
+    
+    detector = AttackIdentifier(
+        source["logic_addr"],
+        contracts,
+        func_sign_list,
+        external_call_signatures_backup,
+        visited_contracts,
+        visited_funcs,
+    )
+    
+    result = initialize_result_structure(args)
+    
+    is_attack, attack_matrix = detector.detect()
+    result["is_attack"] = is_attack
+    result["attack_matrix"] = attack_matrix
+    result["call_paths"] = call_paths
+    result["max_call_depth"] = max_call_depth
+    
+    result["visited_contracts"] = list(set(visited_contracts))
+    result["visited_contracts_num"] = len(result["visited_contracts"])
+    result["visited_funcs"] = list(set(visited_funcs))
+    result["visited_funcs_num"] = len(result["visited_funcs"])
+    
+    populate_semantic_features(result, detector)
+    
+    sensitive_callsigs = detector.get_sig_info()
+    victim_callback_info, attack_reenter_info = detector.get_reen_info()
+    
+    reentrancy_info = {}
+    for func_sig in victim_callback_info:
+        reentrancy_info[func_sig] = {
+            "victim_call": victim_callback_info[func_sig],
+            "reenter_call": attack_reenter_info[func_sig],
+        }
+    result["reentrancy_path_info"] = reentrancy_info
+    
+    result["sensitive_callsigs"] = list(set(sensitive_callsigs))
+    result["contract_funcsigs"] = func_sign_list
+    result["contract_funcsigs_external_call"] = external_call_signatures_backup
+    
+    overlap = list(
+        set(sensitive_callsigs).intersection(set(external_call_signatures_backup))
+    )
+    if overlap:
+        result["overlap"]["has_overlap"] = True
+        result["overlap"]["overlap_external_call"].extend(overlap)
+    
+    result["warning"] = calculate_warning_level(result)
+    result["analysis_loc"] = "createbin" if is_createbin else "runtimebin"
+    
+    end_time = time.perf_counter()
+    execution_time = end_time - start_time
+    
+    save_results(result, args.logic_addr, execution_time)
+
+
+if __name__ == "__main__":
+    main()

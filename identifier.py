@@ -1,65 +1,116 @@
+"""Attack Identification Module
+
+This module contains the core attack detection logic for BlockWatchdog.
+It analyzes contracts and identifies various attack patterns including
+reentrancy, flash loan attacks, DOS attacks, and bad randomness.
+"""
+
 import logging
+from typing import Dict, List, Tuple, Any
+
 from semantic import semantic_feature
-from flow import data_flow, token_flow
+from flow import data_flow
 
 log = logging.getLogger(__name__)
 
 
 class AttackIdentifier:
+    """Main class for identifying various attack patterns in smart contracts.
+    
+    This class integrates semantic analysis and flow analysis to detect:
+    - Reentrancy attacks
+    - Flash loan/price manipulation attacks
+    - Denial of Service (DoS) attacks
+    - Bad randomness vulnerabilities
+    
+    Attributes:
+        contracts: Dictionary of contract instances indexed by unique keys
+        main_contract_sign_list: List of function signatures from main contract
+        external_call_in_func_sigature: Function signatures containing external calls
+        attack_matrix: Dictionary tracking detected attack types
+        visited_contracts: List of contract addresses visited during analysis
+        visited_funcs: List of function signatures visited during analysis
+        semantic_analysis: Instance for semantic pattern analysis
+        flow_analysis: Instance for data/token flow analysis
+    """
 
     def __init__(
         self,
-        input_contract,
-        contracts,
-        main_contract_sign_list,
-        external_call_in_func_sigature,
-        visited_contracts,
-        visited_funcs,
-    ):
+        input_contract: str,
+        contracts: Dict[str, Any],
+        main_contract_sign_list: List[str],
+        external_call_in_func_sigature: List[str],
+        visited_contracts: List[str],
+        visited_funcs: List[str],
+    ) -> None:
+        """Initialize AttackIdentifier with contract analysis data.
+        
+        Args:
+            input_contract: Address of the main contract being analyzed
+            contracts: Dictionary of all analyzed contracts
+            main_contract_sign_list: Function signatures from main contract
+            external_call_in_func_sigature: Functions with external calls
+            visited_contracts: Contracts visited during call graph construction
+            visited_funcs: Functions visited during call graph construction
+        """
         self.contracts = contracts
         self.main_contract_sign_list = main_contract_sign_list
         self.external_call_in_func_sigature = external_call_in_func_sigature
-        self.intra_callsigs = []
-        self.sensitive_callsigs = []
+        self.input_contract = input_contract
+        
+        self.intra_callsigs: List[str] = []
+        self.sensitive_callsigs: List[str] = []
         self.attack_matrix = {
             "br": False,
             "dos": False,
             "reentrancy": False,
             "price_manipulation": False,
         }
+        
         self.visited_contracts = visited_contracts
         self.visited_funcs = visited_funcs
-        self.victim_callback_info = {}
-        self.attack_reenter_info = {}
-        self.input_contract = input_contract
+        self.victim_callback_info: Dict[str, List[Any]] = {}
+        self.attack_reenter_info: Dict[str, List[Any]] = {}
+        
         self.flow_analysis = data_flow.FlowAnalysis(input_contract, contracts)
-
         self.semantic_analysis = semantic_feature.AttackSemantics(contracts)
 
-    def detect(self):
-        cross_contract = False
-        for key in self.contracts.keys():
-            if self.contracts[key].level != 0:
-                cross_contract = True
-
-        if not cross_contract:
+    def detect(self) -> Tuple[bool, Dict[str, bool]]:
+        """Main detection method that identifies various attack patterns.
+        
+        Returns:
+            Tuple of (is_attack, attack_matrix) where:
+            - is_attack: Boolean indicating if any attack pattern was detected
+            - attack_matrix: Dictionary showing which specific attacks were found
+        """
+        if not self._has_cross_contract_calls():
             return False, self.attack_matrix
+        
+        self._detect_semantic_attacks()
+        self._detect_flow_based_attacks()
+        self._detect_reentrancy_attacks()
+        
+        is_attack = any(self.attack_matrix.values())
+        return is_attack, self.attack_matrix
 
-        result = False
-
-        # br and dos detection
+    def _has_cross_contract_calls(self) -> bool:
+        """Check if there are any cross-contract calls in the analysis."""
+        return any(contract.level != 0 for contract in self.contracts.values())
+    
+    def _detect_semantic_attacks(self) -> None:
+        """Detect attacks based on semantic patterns."""
         if self.semantic_analysis.intraprocedural_br_analysis():
             self.attack_matrix["br"] = True
-
+        
         if self.semantic_analysis.intraprocedural_dos_analysis():
             self.attack_matrix["dos"] = True
-
+    
+    def _detect_flow_based_attacks(self) -> None:
+        """Detect attacks based on flow analysis."""
         if self.flow_analysis.intraprocedural_fla_analysis():
-            log.info("intraprocedural analysis true of flashloan attack")
-            print("intraprocedural analysis true of flashloan attack")
+            log.info("Intraprocedural analysis detected flashloan attack")
             self.attack_matrix["price_manipulation"] = True
         else:
-            # define the vulnerable trace
             pps_near_fl_source = self.flow_analysis.get_pps_near_fl_source()
             pps_near_fl_sink = self.flow_analysis.get_pps_near_fl_sink()
             self.attack_matrix["price_manipulation"] = (
@@ -67,98 +118,147 @@ class AttackIdentifier:
                     pps_near_fl_source, pps_near_fl_sink
                 )
             )
-
+        
         if self.semantic_analysis.op_externalcall_callback_analysis():
             self.attack_matrix["price_manipulation"] = True
-
-        # so how to define the tainted source
-        # !the tainted source should only be from the analyzed contracts (i.e., input contract)
+    
+    def _detect_reentrancy_attacks(self) -> bool:
+        """Detect reentrancy attacks through flow and semantic analysis."""
         pps_near_source = self.flow_analysis.get_pps_near_source()
-        # and how to define the sentive sink
         pps_near_sink, sensitive_callsigs = self.flow_analysis.get_pps_near_sink()
-
-        # set call sigs in the sink site
+        
         self.sensitive_callsigs = sensitive_callsigs
-
-        reachable = False
-        reachable_site = {}
-
-        # for every source, find whether one sink can be reached
-        for pp1 in pps_near_source:
-            for pp2 in pps_near_sink:
-                if self.flow_analysis.is_same(pp1, pp2):
-                    reachable = True
-                    caller = pp2["caller"]
-                    caller_funcSign = pp2["caller_funcSign"]
-                    reachable_site[pp2["func_sign"]] = {
-                        "caller": caller,
-                        "caller_callback_funcSign": caller_funcSign,
+        
+        reachable_sites = self._find_reachable_sites(pps_near_source, pps_near_sink)
+        
+        if reachable_sites:
+            self._analyze_callback_reentrancy(sensitive_callsigs, reachable_sites)
+        
+        if self._check_semantic_reentrancy_patterns():
+            self.attack_matrix["reentrancy"] = True
+            return True
+        
+        return self.attack_matrix["reentrancy"]
+    
+    def _find_reachable_sites(
+        self, pps_near_source: List[Dict], pps_near_sink: List[Dict]
+    ) -> Dict[str, Dict[str, str]]:
+        """Find program points where source can reach sink."""
+        reachable_sites = {}
+        
+        for source_pp in pps_near_source:
+            for sink_pp in pps_near_sink:
+                if (
+                    self.flow_analysis.is_same(source_pp, sink_pp)
+                    or self.flow_analysis.is_reachable(source_pp, sink_pp)
+                ):
+                    func_sign = sink_pp["func_sign"]
+                    reachable_sites[func_sign] = {
+                        "caller": sink_pp["caller"],
+                        "caller_callback_funcSign": sink_pp["caller_funcSign"],
                     }
-                elif self.flow_analysis.is_reachable(pp1, pp2):
-                    reachable = True
-                    caller = pp2["caller"]
-                    caller_funcSign = pp2["caller_funcSign"]
-                    reachable_site[pp2["func_sign"]] = {
-                        "caller": caller,
-                        "caller_callback_funcSign": caller_funcSign,
-                    }
-
+        
+        return reachable_sites
+    
+    def _analyze_callback_reentrancy(
+        self, sensitive_callsigs: List[str], reachable_sites: Dict[str, Dict]
+    ) -> None:
+        """Analyze callback-based reentrancy patterns."""
+        overlap = list(
+            set(sensitive_callsigs).intersection(
+                set(self.external_call_in_func_sigature)
+            )
+        )
+        
+        if not overlap:
+            return
+        
         victim_callback_info = {}
         attack_reenter_info = {}
-
-        if reachable:
-            # judge whether the attacker contract implements the sensitive functions (called by victims)
-            overlap = list(
-                set(sensitive_callsigs).intersection(
-                    set(self.external_call_in_func_sigature)
-                )
-            )
-            if len(overlap) > 0:
-                for i in overlap:
-                    victim_callback_info[i] = []
-                    attack_reenter_info[i] = []
-
-                    if i in reachable_site:
-                        if reachable_site[i] not in victim_callback_info[i]:
-                            victim_callback_info[i].append(reachable_site[i])
-                    for key in self.contracts.keys():
-                        if (
-                            str(self.contracts[key].func_sign) == str(i)
-                            and self.contracts[key].level == 0
-                        ):
-                            externall_calls = self.contracts[key].external_calls
-                            for ec in externall_calls:
-                                temp_target_address = ec["logic_addr"]
-                                temp_funcSign = ec["funcSign"]
-
-                                res = {
-                                    "reenter_target": temp_target_address,
-                                    "reenter_funcSign": temp_funcSign,
-                                }
-                                if (
-                                    res not in attack_reenter_info[i]
-                                    and temp_target_address in self.visited_contracts
-                                    and temp_funcSign in self.visited_funcs
-                                ):
-                                    attack_reenter_info[i].append(res)
-                            result = True
-                            self.attack_matrix["reentrancy"] = True
-        if (
+        
+        for func_sig in overlap:
+            victim_callback_info[func_sig] = []
+            attack_reenter_info[func_sig] = []
+            
+            if func_sig in reachable_sites:
+                site_info = reachable_sites[func_sig]
+                if site_info not in victim_callback_info[func_sig]:
+                    victim_callback_info[func_sig].append(site_info)
+            
+            self._find_reenter_targets(func_sig, attack_reenter_info)
+        
+        if any(attack_reenter_info.values()):
+            self.attack_matrix["reentrancy"] = True
+        
+        self.victim_callback_info = victim_callback_info
+        self.attack_reenter_info = attack_reenter_info
+    
+    def _find_reenter_targets(
+        self, func_sig: str, attack_reenter_info: Dict[str, List]
+    ) -> None:
+        """Find potential reenter targets for a given function signature."""
+        for contract in self.contracts.values():
+            if (
+                str(contract.func_sign) == str(func_sig)
+                and contract.level == 0
+            ):
+                for external_call in contract.external_calls:
+                    target_address = external_call["logic_addr"]
+                    target_func_sign = external_call["funcSign"]
+                    
+                    reenter_info = {
+                        "reenter_target": target_address,
+                        "reenter_funcSign": target_func_sign,
+                    }
+                    
+                    if (
+                        reenter_info not in attack_reenter_info[func_sig]
+                        and target_address in self.visited_contracts
+                        and target_func_sign in self.visited_funcs
+                    ):
+                        attack_reenter_info[func_sig].append(reenter_info)
+    
+    def _check_semantic_reentrancy_patterns(self) -> bool:
+        """Check for semantic reentrancy patterns."""
+        return (
             self.semantic_analysis.double_call_to_same_contract()
             or self.semantic_analysis.double_call_to_same_contract_by_storage()
             or self.semantic_analysis.preset_call_in_standard_erc20_transfer()
-        ):
-            self.attack_matrix["reentrancy"] = True
-            result = True
-        self.victim_callback_info = victim_callback_info
-        self.attack_reenter_info = attack_reenter_info
-        return result, self.attack_matrix
-
-    def get_reen_info(self):
+        )
+    
+    def get_reentrancy_info(self) -> Tuple[Dict[str, List], Dict[str, List]]:
+        """Get reentrancy attack information.
+        
+        Returns:
+            Tuple of (victim_callback_info, attack_reenter_info)
+        """
         return self.victim_callback_info, self.attack_reenter_info
-
-    def get_sig_info(self):
+    
+    def get_sensitive_signatures(self) -> List[str]:
+        """Get list of sensitive function signatures.
+        
+        Returns:
+            List of function signatures that are considered sensitive
+        """
         return self.sensitive_callsigs
-
-    def get_attack_matric(self):
+    
+    def get_attack_matrix(self) -> Dict[str, bool]:
+        """Get the attack detection matrix.
+        
+        Returns:
+            Dictionary mapping attack types to their detection status
+        """
         return self.attack_matrix
+    
+    # Legacy method names for backward compatibility
+    def get_reen_info(self):
+        """Legacy method - use get_reentrancy_info() instead."""
+        return self.get_reentrancy_info()
+    
+    def get_sig_info(self):
+        """Legacy method - use get_sensitive_signatures() instead."""
+        return self.get_sensitive_signatures()
+    
+    def get_attack_matric(self):
+        """Legacy method - use get_attack_matrix() instead."""
+        return self.get_attack_matrix()

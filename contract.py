@@ -1,5 +1,13 @@
+"""Contract Analysis Module
+
+This module provides the Contract class for representing and analyzing
+smart contracts. It handles bytecode download, decompilation via Gigahorse,
+function signature extraction, and external call identification.
+"""
+
 import logging
 import os
+from typing import Dict, List, Any, Optional
 
 import pandas as pd
 from web3 import Web3
@@ -9,220 +17,300 @@ import global_params
 log = logging.getLogger(__name__)
 
 
-# Data structure of contracts in the tr}
 class Contract:
+    """Represents a smart contract with analysis capabilities.
+    
+    This class encapsulates all contract-related data and provides methods
+    for downloading bytecode, analyzing contract structure, and identifying
+    external calls and function signatures.
+    
+    Attributes:
+        platform: Blockchain platform (ETH, BSC, FTM, ARB)
+        logic_addr: Contract address containing business logic
+        storage_addr: Contract address containing storage data
+        func_sign: Function signature being analyzed
+        block_number: Blockchain snapshot block number
+        caller: Address calling this contract
+        call_site: Location of the external call
+        level: Depth level in call graph traversal
+        origin: Whether this is the original contract being analyzed
+        createbin: Whether contract only has creation bytecode
+        external_calls: List of external calls made by this contract
+        func_sign_list: List of all function signatures in contract
+        external_call_in_func_sigature: Function signatures with external calls
+    """
 
     def __init__(
         self,
-        platform,
-        logic_addr,
-        storage_addr,
-        func_sign,
-        block_number,
-        caller,
-        call_site,
-        level,
-        callArgVals={},
-    ):
+        platform: str,
+        logic_addr: str,
+        storage_addr: str,
+        func_sign: str,
+        block_number: int,
+        caller: str,
+        call_site: str,
+        level: int,
+        callArgVals: Optional[Dict[int, Any]] = None,
+    ) -> None:
+        """Initialize Contract instance.
+        
+        Args:
+            platform: Blockchain platform identifier
+            logic_addr: Contract logic address
+            storage_addr: Contract storage address  
+            func_sign: Target function signature
+            block_number: Block number for analysis
+            caller: Calling contract address
+            call_site: External call location
+            level: Call graph traversal depth
+            callArgVals: Known function argument values
+        """
+        if callArgVals is None:
+            callArgVals = {}
+            
         self.platform = platform
-        self.logic_addr = self.format_addr(logic_addr)
-        self.storage_addr = self.format_addr(storage_addr)
+        self.logic_addr = self._format_address(logic_addr)
+        self.storage_addr = self._format_address(storage_addr)
         self.func_sign = func_sign
-        # the first analyzed contract
-        self.origin = False
-        if self.func_sign == "":
-            self.origin = True
-        self.func = []
-        # all funcs and func_sigs
-        self.func_sign_dict = {}
-        self.func_sign_list = []
-        # signature of funcs that contain external call
-        self.external_call_in_func_sigature = []
         self.block_number = block_number
         self.caller = caller
         self.call_site = call_site
-        self.callArgVals = callArgVals
-        self.knownArgVals = {}
-        self.url = ""
-        self.external_calls = []
         self.level = level
+        self.callArgVals = callArgVals
+        
+        # Contract analysis state
+        self.origin = not bool(func_sign)
         self.createbin = False
-        self.storage_space = {}
-        # self.env_val = env_val
-        logging.info(
-            "known function args from the previous call: {}".format(self.callArgVals)
-        )
+        self.func = []
+        self.func_sign_dict: Dict[str, str] = {}
+        self.func_sign_list: List[str] = []
+        self.external_call_in_func_sigature: List[str] = []
+        self.external_calls: List[Dict[str, Any]] = []
+        self.knownArgVals: Dict[str, Dict[int, Any]] = {}
+        self.storage_space: Dict = {}
+        self.url = ""
+        
+        logging.info(f"Known function args from previous call: {self.callArgVals}")
         self.analyze()
 
-    def format_addr(self, addr):
+    def _format_address(self, addr: str) -> str:
+        """Format Ethereum address to standard 42-character format.
+        
+        Args:
+            addr: Address string to format
+            
+        Returns:
+            Properly formatted Ethereum address
+        """
         if len(addr) != 42:
             return "0x" + "0" * (42 - len(addr)) + addr.replace("0x", "")
-        else:
-            return addr
-
-    def is_createbin(self):
+        return addr
+    
+    def is_createbin(self) -> bool:
+        """Check if contract only has creation bytecode.
+        
+        Returns:
+            True if contract is creation bytecode only
+        """
         return self.createbin
-
-    def get_func_sign_list(self):
+    
+    def get_func_sign_list(self) -> List[str]:
+        """Get list of all function signatures in the contract.
+        
+        Returns:
+            List of function signatures
+        """
         return self.func_sign_list
-
-    def get_external_call_in_func_sigature(self):
+    
+    def get_external_call_in_func_sigature(self) -> List[str]:
+        """Get function signatures that contain external calls.
+        
+        Returns:
+            List of function signatures with external calls
+        """
         return self.external_call_in_func_sigature
 
-    def analyze(self):
-        logging.info("analyzing " + self.logic_addr)
-        logging.info("caller " + self.caller)
-        logging.info("call_site " + self.call_site)
-        logging.info("func_sign " + self.func_sign)
-        self.set_url()
-        self.download_bytecode()
-        if os.path.exists(global_params.CONTRACT_PATH + self.logic_addr + ".hex"):
-            self.analyze_contract()
-            self.set_func()
+    def analyze(self) -> None:
+        """Main analysis workflow for the contract.
+        
+        This method orchestrates the entire contract analysis process:
+        1. Set up blockchain connection URL
+        2. Download contract bytecode
+        3. Analyze contract structure using Gigahorse
+        4. Extract function signatures and external calls
+        """
+        logging.info(f"Analyzing contract {self.logic_addr}")
+        logging.info(f"Caller: {self.caller}")
+        logging.info(f"Call site: {self.call_site}")
+        logging.info(f"Function signature: {self.func_sign}")
+        
+        self._set_blockchain_url()
+        self._download_bytecode()
+        
+        contract_path = global_params.CONTRACT_PATH + self.logic_addr + ".hex"
+        if os.path.exists(contract_path):
+            self._analyze_with_gigahorse()
+            self._extract_function_signatures()
+            self._set_call_argument_values()
+            self._set_known_argument_values()
+            
+            logging.info(f"Call arg values from previous contract: {self.callArgVals}")
+            logging.info(f"Known arg values in current contract: {self.knownArgVals}")
+            
+            self._extract_external_calls()
 
-            self.set_callArgVals()
-            self.set_knownArgVals()
-            logging.info(
-                "call arg vals obtained from the previous contract call {}".format(
-                    self.callArgVals
-                )
-            )
-            logging.info(
-                "known arg vals in the current contract call {}".format(
-                    self.knownArgVals
-                )
-            )
-            if self.origin is True:
-                if not self.createbin:
-                    # remove key 0x0 from the dict  func_sign_dict
-                    del self.func_sign_dict["0x0"]
-                for func in self.func_sign_dict.keys():
-                    logging.info(
-                        "set external calls in function " + self.func_sign_dict[func]
-                    )
-                    self.set_external_calls(func, self.func_sign_dict[func])
-            else:
-                self.set_external_calls(self.func, self.func_sign)
+    def _set_blockchain_url(self) -> None:
+        """Set the appropriate blockchain RPC URL based on platform."""
+        url_mapping = {
+            "ETH": "https://eth-mainnet.g.alchemy.com/v2/6t0LpEw9cr0OlGIVTFqs92aOIkfhktMk",
+            "BSC": "https://little-aged-thunder.bsc.quiknode.pro/53b86587d990e1cb9354cd2a01ebb3b16109427f/",
+            "FTM": "https://practical-long-energy.fantom.discover.quiknode.pro/fc97af1ebab40f57ea698b6cf3dd67a2d24cac1a/",
+            "ARB": "https://arb-mainnet.g.alchemy.com/v2/uQXNRP9T7_rg0AB1VZbjClHMf0w7OiCA",
+        }
+        self.url = url_mapping.get(self.platform, "")
 
-    def set_url(self):
-        if self.platform == "ETH":
-            self.url = "https://eth-mainnet.g.alchemy.com/v2/6t0LpEw9cr0OlGIVTFqs92aOIkfhktMk"  # backup: https://eth-mainnet.g.alchemy.com/v2/6t0LpEw9cr0OlGIVTFqs92aOIkfhktMk
-        elif self.platform == "BSC":
-            self.url = "https://little-aged-thunder.bsc.quiknode.pro/53b86587d990e1cb9354cd2a01ebb3b16109427f/"
-        elif self.platform == "FTM":
-            self.url = "https://practical-long-energy.fantom.discover.quiknode.pro/fc97af1ebab40f57ea698b6cf3dd67a2d24cac1a/"
-        elif self.platform == "ARB":
-            self.url = (
-                "https://arb-mainnet.g.alchemy.com/v2/uQXNRP9T7_rg0AB1VZbjClHMf0w7OiCA"
-            )
-        else:
-            self.url = ""
-        # w3 = Web3(Web3.HTTPProvider(self.url))
-        # self.block_number = w3.eth.get_block_number()
-
-    def download_bytecode(self):
-        if self.url == "":
+    def _download_bytecode(self) -> None:
+        """Download contract bytecode from blockchain or load from cache.
+        
+        This method first checks for cached bytecode, then attempts to download
+        from the blockchain if needed. For contracts with no runtime code,
+        it tries to find and use creation bytecode.
+        """
+        if not self.url:
             return
-        loc = global_params.CONTRACT_PATH + self.logic_addr + ".hex"
-        if os.path.exists(loc):
-            with open(loc, "r") as f:
-                bin = f.read()
-                if bin == "0x":
-                    bin_content = (
-                        global_params.CONTRACT_PATH
-                        + "createbin/"
-                        + self.logic_addr
-                        + "_createbin.hex"
-                    )
-                    with open(bin_content, "r") as bf:
-                        bin = bf.read()
-                    with open(loc, "w") as wf:
-                        wf.write(bin[2:])
-                    self.createbin = True
-                    # self.origin = True
-                    # createbin only has constructor
-                    self.func_sign = "__function_selector__"
-                    self.func_sign_list = ["__function_selector__"]
-            return
+        
+        bytecode_path = global_params.CONTRACT_PATH + self.logic_addr + ".hex"
+        
+        if os.path.exists(bytecode_path):
+            self._load_cached_bytecode(bytecode_path)
         else:
-            # switch case for http or wss provider
-            if self.url.startswith("https"):
-                w3 = Web3(Web3.HTTPProvider(self.url))
-            else:
-                w3 = Web3(Web3.WebsocketProvider(self.url))
+            self._fetch_bytecode_from_blockchain(bytecode_path)
+    
+    def _load_cached_bytecode(self, bytecode_path: str) -> None:
+        """Load bytecode from cached file."""
+        with open(bytecode_path, "r") as f:
+            bytecode = f.read()
+            
+        if bytecode == "0x":
+            self._load_creation_bytecode(bytecode_path)
+    
+    def _load_creation_bytecode(self, bytecode_path: str) -> None:
+        """Load creation bytecode when runtime bytecode is empty."""
+        creation_path = (
+            global_params.CONTRACT_PATH + "createbin/" + 
+            self.logic_addr + "_createbin.hex"
+        )
+        
+        if os.path.exists(creation_path):
+            with open(creation_path, "r") as f:
+                creation_bytecode = f.read()
+            
+            with open(bytecode_path, "w") as f:
+                f.write(creation_bytecode[2:])  # Remove 0x prefix
+            
+            self.createbin = True
+            self.func_sign = "__function_selector__"
+            self.func_sign_list = ["__function_selector__"]
+    
+    def _fetch_bytecode_from_blockchain(self, bytecode_path: str) -> None:
+        """Fetch bytecode directly from blockchain."""
+        web3 = self._create_web3_instance()
+        if not web3:
+            return
+            
+        try:
             contract_address = Web3.to_checksum_address(self.logic_addr)
-            code = str(w3.eth.get_code(contract_address).hex())
-            if code != "0x":
-                with open(loc, "w") as f:
-                    f.write(code[2:])
-            # todo: try to analyze the createbin of the contract (load from the firts transaction input)
-            # else:
+            bytecode = web3.eth.get_code(contract_address).hex()
+            
+            if bytecode != "0x":
+                with open(bytecode_path, "w") as f:
+                    f.write(bytecode[2:])  # Remove 0x prefix
+        except Exception as e:
+            logging.error(f"Failed to fetch bytecode for {self.logic_addr}: {e}")
+    
+    def _create_web3_instance(self) -> Optional[Web3]:
+        """Create Web3 instance based on URL type."""
+        try:
+            if self.url.startswith("https"):
+                return Web3(Web3.HTTPProvider(self.url))
+            else:
+                return Web3(Web3.WebsocketProvider(self.url))
+        except Exception as e:
+            logging.error(f"Failed to create Web3 instance: {e}")
+            return None
 
-    def analyze_contract(self):
-        # use leslie client to analyze the contract
+    def _analyze_with_gigahorse(self) -> None:
+        """Analyze contract using Gigahorse decompiler."""
         command = (
             "cd ./gigahorse-toolchain && ./gigahorse.py -C ./clients/leslie.dl "
-            + global_params.CONTRACT_DIR
-            + "{contract_addr}.hex >/dev/null 2>&1"
+            f"{global_params.CONTRACT_DIR}{self.logic_addr}.hex >/dev/null 2>&1"
         )
-        os.system(command.format(contract_addr=self.logic_addr))
-
-    def set_func(self):
-        loc = (
-            "./gigahorse-toolchain/.temp/"
-            + self.logic_addr
-            + "/out/Leslie_FunctionSelector.csv"
+        os.system(command)
+    
+    def _extract_function_signatures(self) -> None:
+        """Extract function signatures from Gigahorse analysis results."""
+        signatures_path = (
+            f"./gigahorse-toolchain/.temp/{self.logic_addr}/out/Leslie_FunctionSelector.csv"
         )
-        if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-            df = pd.read_csv(loc, header=None, sep="	")
+        
+        if not (os.path.exists(signatures_path) and os.path.getsize(signatures_path) > 0):
+            return
+        
+        try:
+            df = pd.read_csv(signatures_path, header=None, sep="\t")
             df.columns = ["func", "funcSign"]
-            # store all funcs and their signatures
-            if self.origin is True:
-                funcs = []
-                func_signs = []
-                for func in df["func"]:
-                    funcs.append(func)
-                for fun_sign in df["funcSign"]:
-                    func_signs.append(fun_sign)
-                self.func_sign_list = func_signs
-                self.func_sign_dict = dict(zip(funcs, func_signs))
-            else:  # for intermediate interacted contracts, we only trace targeted functions
-                try:
-                    self.func = list(df.loc[df["funcSign"] == self.func_sign, "func"])[
-                        0
-                    ]
-                except Exception:
-                    try:
-                        self.func = list(
-                            df.loc[df["funcSign"] == "0x00000000", "func"]
-                        )[0]
-                    except Exception:
-                        None
+            
+            if self.origin:
+                self.func_sign_list = df["funcSign"].tolist()
+                self.func_sign_dict = dict(zip(df["func"], df["funcSign"]))
+            else:
+                # For intermediate contracts, find specific function
+                matching_funcs = df.loc[df["funcSign"] == self.func_sign, "func"]
+                if not matching_funcs.empty:
+                    self.func = matching_funcs.iloc[0]
+                else:
+                    # Fallback to default function
+                    fallback_funcs = df.loc[df["funcSign"] == "0x00000000", "func"]
+                    if not fallback_funcs.empty:
+                        self.func = fallback_funcs.iloc[0]
+        except Exception as e:
+            logging.error(f"Failed to extract function signatures: {e}")
+    
+    def _set_call_argument_values(self) -> None:
+        """Set call argument values (placeholder for future implementation)."""
+        log.info(f"Call arg values: {self.callArgVals}")
+    
+    def _extract_external_calls(self) -> None:
+        """Extract external calls based on contract origin status."""
+        if self.origin:
+            if not self.createbin and "0x0" in self.func_sign_dict:
+                del self.func_sign_dict["0x0"]
+            
+            for func, func_sign in self.func_sign_dict.items():
+                logging.info(f"Setting external calls in function {func_sign}")
+                self.set_external_calls(func, func_sign)
+        else:
+            self.set_external_calls(self.func, self.func_sign)
 
     # add env var tracer (also known dynamically)
-    def set_callArgVals(self):
-        # change code to read the known_args from the previous contract call
-        # if self.caller != "":
-        #     self.callArgVals = self.knownArgVals
-        # if self.caller != "":
-        #     loc = (
-        #         "./gigahorse-toolchain/.temp/"
-        #         + self.caller
-        #         + "/out/Leslie_ExternalCall_Known_Arg.csv"
-        #     )
-        #     if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-        #         df = pd.read_csv(loc, header=None, sep="	")
-        #         df.columns = ["func", "callStmt", "argIndex", "argVal"]
-        #         # it is not neccessary to label the func, just focus on the callStmt
-        #         df = df.loc[df["callStmt"] == self.call_site]
-        #         for i in range(len(df)):
-        #             temp_index = int(df.iloc[i]["argIndex"])
-        #             temp_callArgVal = df.iloc[i]["argVal"]
-        #             self.callArgVals[temp_index] = temp_callArgVal
-        #     if self.env_val is not None:
-        #         for index in self.env_val.keys():
-        #             self.callArgVals[index] = self.env_val[index]
-        log.info("====call arg vals {}====".format(self.callArgVals))
+    def _set_known_argument_values(self) -> None:
+        """Set known argument values from various sources.
+        
+        This method extracts known argument values from:
+        1. Constant values identified by Gigahorse
+        2. Environment variables (CALLER, ADDRESS, ORIGIN)
+        3. Storage slot values (if enabled)
+        4. Function argument propagation
+        """
+        self._extract_known_constant_args()
+        
+        if global_params.CALLARG_STORAGETYPE:
+            self._extract_storage_based_args()
+            
+        self._extract_environment_based_args()
+        self._propagate_function_arguments()
+        
+        log.info(f"Known arg values: {self.knownArgVals}")
 
     def get_fl_transfer(self):
         loc = (
@@ -267,23 +355,32 @@ class Contract:
                     }
         return call
 
-    def set_knownArgVals(self):
-        loc = (
-            "./gigahorse-toolchain/.temp/"
-            + self.logic_addr
-            + "/out/Leslie_ExternalCall_Known_Arg.csv"
+    def _extract_known_constant_args(self) -> None:
+        """Extract known constant argument values."""
+        constants_path = (
+            f"./gigahorse-toolchain/.temp/{self.logic_addr}/out/Leslie_ExternalCall_Known_Arg.csv"
         )
-        if os.path.exists(loc) and (os.path.getsize(loc) > 0):
-            df = pd.read_csv(loc, header=None, sep="	")
+        
+        if not (os.path.exists(constants_path) and os.path.getsize(constants_path) > 0):
+            return
+            
+        try:
+            df = pd.read_csv(constants_path, header=None, sep="\t")
             df.columns = ["func", "callStmt", "argIndex", "argVal"]
-            for i in range(len(df)):
-                temp_index = int(df.iloc[i]["argIndex"])
-                temp_callArgVal = df.iloc[i]["argVal"]
-                temp_stmt = df.iloc[i]["callStmt"]
-                if temp_stmt not in self.knownArgVals.keys():
-                    self.knownArgVals[temp_stmt] = {}
-                self.knownArgVals[temp_stmt][temp_index] = temp_callArgVal
-            logging.info(self.knownArgVals)
+            
+            for _, row in df.iterrows():
+                stmt = row["callStmt"]
+                arg_index = int(row["argIndex"])
+                arg_value = row["argVal"]
+                
+                if stmt not in self.knownArgVals:
+                    self.knownArgVals[stmt] = {}
+                    
+                self.knownArgVals[stmt][arg_index] = arg_value
+                
+            logging.info(f"Extracted constant args: {self.knownArgVals}")
+        except Exception as e:
+            logging.error(f"Failed to extract known constant args: {e}")
 
         # big overhead for rpc request
         if global_params.CALLARG_STORAGETYPE:
