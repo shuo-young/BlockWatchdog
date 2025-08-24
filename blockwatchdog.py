@@ -101,39 +101,6 @@ def create_source_config(args: argparse.Namespace) -> Dict[str, Any]:
         "level": 0,
         "callArgVals": {},
     }
-    begin = time.perf_counter()
-
-    call_paths = []
-
-    original_contract = Contract(
-        source["platform"],
-        source["logic_addr"],
-        source["storage_addr"],
-        source["func_sign"],
-        source["block_number"],
-        source["caller"],
-        source["call_site"],
-        source["level"],
-        source["callArgVals"],
-    )
-    func_sign_list = original_contract.get_func_sign_list()
-    if args.func_sign == "":
-        external_call_in_func_sigature = (
-            original_contract.get_external_call_in_func_sigature()
-        )
-    else:
-        external_call_in_func_sigature = [args.func_sign]
-
-    # store the signatures of functions that contain external calls
-    store_external_call_in_func_sigature_list = []
-    for i in external_call_in_func_sigature:
-        store_external_call_in_func_sigature_list.append(i)
-
-    visited_contracts = []
-    visited_funcs = []
-    # the max call depths of a contract
-    m_call_depth = 0
-
 
 
 def process_createbin_contract(
@@ -190,15 +157,6 @@ def process_runtime_contract(
     
     return call_paths, max_call_depth, visited_contracts, visited_funcs
 
-    detector = AttackIdentifier(
-        source["logic_addr"],
-        contracts,
-        func_sign_list,
-        store_external_call_in_func_sigature_list,
-        visited_contracts,
-        visited_funcs,
-    )
-
 
 def initialize_result_structure(args: argparse.Namespace) -> Dict[str, Any]:
     """Initialize the result dictionary with default values."""
@@ -234,17 +192,6 @@ def initialize_result_structure(args: argparse.Namespace) -> Dict[str, Any]:
         "overlap": {"has_overlap": False, "overlap_external_call": []},
         "reentrancy_path_info": {},
     }
-
-    result["is_attack"], result["attack_matrix"] = detector.detect()
-    result["call_paths"] = call_paths
-
-    result["max_call_depth"] = m_call_depth
-
-    result["visited_contracts"] = list(set(visited_contracts))
-    result["visited_contracts_num"] = len(list(set(visited_contracts)))
-    result["visited_funcs"] = list(set(visited_funcs))
-    result["visited_funcs_num"] = len(list(set(visited_funcs)))
-
 
 
 def populate_semantic_features(
@@ -285,23 +232,6 @@ def populate_semantic_features(
 
     result["sensitive_callsigs"] = list(set(sensitive_callsigs))
 
-    result["contract_funcsigs"] = func_sign_list
-    result["contract_funcsigs_external_call"] = (
-        store_external_call_in_func_sigature_list
-    )
-
-    # find whether there is a callback to the function that contains external call
-    overlap = list(
-        set(sensitive_callsigs).intersection(
-            set(store_external_call_in_func_sigature_list)
-        )
-    )
-    if len(overlap) > 0:
-        result["overlap"]["has_overlap"] = True
-        for i in overlap:
-            result["overlap"]["overlap_external_call"].append(i)
-
-
 
 def calculate_warning_level(result: Dict[str, Any]) -> str:
     """Calculate warning level based on semantic features and overlaps."""
@@ -319,14 +249,6 @@ def calculate_warning_level(result: Dict[str, Any]) -> str:
     
     return "medium"
 
-    if is_createbin:
-        result["analysis_loc"] = "createbin"
-    else:
-        result["analysis_loc"] = "runtimebin"
-
-    end = time.perf_counter()
-
-
 
 def save_results(
     result: Dict[str, Any], logic_addr: str, execution_time: float
@@ -340,7 +262,6 @@ def save_results(
     store_path = global_params.JSON_PATH + logic_addr + ".json"
     with open(store_path, "w", encoding="utf-8") as f:
         f.write(json.dumps(output, indent=2, ensure_ascii=False))
-
 
 
 def main() -> None:
