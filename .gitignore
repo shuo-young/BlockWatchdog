@@ -12,6 +12,6 @@ __pycache__
 
 .DS_Store
 
-output/
+output/*.json
 
 gigahorse-toolchain/contracts

@@ -80,7 +80,7 @@ pip3 install -r requirements.txt
 2. Or you can build or pull the docker image.
 
 ```sh
-docker build -t BlockWatchdog:local .
+docker build -t blockwatchdog:local .
 docker pull ghcr.io/shuo-young/blockwatchdog:latest
 ```
 
@@ -91,6 +91,7 @@ docker pull ghcr.io/shuo-young/blockwatchdog:latest
 ```sh
 python3 blockwatchdog.py -la 0x10C509AA9ab291C76c45414e7CdBd375e1D5AcE8
 ```
+It will take a while for the first run due to datalog file compilation.
 
 ### Docker
 
